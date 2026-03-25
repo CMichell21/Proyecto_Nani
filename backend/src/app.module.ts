@@ -1,0 +1,27 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { SupabaseModule } from './supabase/supabase.module';
+import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
+import { NinerasModule } from './nineras/nineras.module';
+import { ReservasModule } from './reservas/reservas.module';
+import { ClientesModule } from './clientes/clientes.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    SupabaseModule,
+    UsersModule,
+    AuthModule,
+    NinerasModule,
+    ReservasModule,
+    ClientesModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
