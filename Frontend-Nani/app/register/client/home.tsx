@@ -317,7 +317,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => onNavigate("/register/client/chat")}
+            onPress={() => router.push("/register/client/chat")}
           >
             <View style={styles.chatIconWrapper}>
               <Ionicons
@@ -331,7 +331,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => onNavigate("profile")}
+            onPress={() => router.push("/register/client/UserProfile")}
           >
             <Ionicons name="person-outline" size={22} color="#B0B0B0" />
             <Text style={styles.navText}>Perfil</Text>
