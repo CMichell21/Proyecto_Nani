@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import {
     FlatList,
     Image,
@@ -127,7 +128,12 @@ export default function ChatScreen() {
     >
       {/* HEADER */}
 
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#886BC1", "#FF768A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.circleButton}
@@ -152,7 +158,7 @@ export default function ChatScreen() {
             <Phone color="white" size={20} />
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* MESSAGES */}
 
@@ -209,9 +215,10 @@ const styles = StyleSheet.create({
 
   header: {
     paddingTop: 60,
-    paddingBottom: 15,
     paddingHorizontal: 20,
-    backgroundColor: "#886BC1",
+    paddingBottom: 15,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
   },
 
   headerRow: {

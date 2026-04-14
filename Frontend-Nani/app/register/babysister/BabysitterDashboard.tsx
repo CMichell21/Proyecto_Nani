@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
@@ -504,7 +505,12 @@ export default function BabysitterDashboard() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#886BC1", "#FF768A"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.hello}>Hola, {userName} 👋</Text>
@@ -543,7 +549,7 @@ export default function BabysitterDashboard() {
             <Text style={styles.statLabel}>Mensajes</Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>Reservas activas</Text>
@@ -1030,8 +1036,9 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: "#886BC1",
+    paddingBottom: 25,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
   },
 
   headerTop: {

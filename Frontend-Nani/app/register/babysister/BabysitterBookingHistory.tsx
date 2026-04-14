@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
@@ -34,7 +35,7 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
 
   const normalizeStatus = (
     estado: string,
-  ): "pending" | "confirmed" | "in_progress" | "completed" => {
+  ): "pending" | "confirmed" | "in_progress" | "completed" | "rejected" => {
     const estadoNormalizado = (estado || "").toString().trim().toLowerCase();
 
     if (estadoNormalizado === "pendiente") return "pending";
@@ -186,7 +187,12 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView>
-        <View style={styles.header}>
+        <LinearGradient
+          colors={["#886BC1", "#FF768A"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={onBack}>
               <Ionicons name="arrow-back" size={20} color="white" />
@@ -206,7 +212,7 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
               <Text style={styles.statValue}>L {totalEarnings}</Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.searchContainer}>
           <View style={styles.searchBox}>
@@ -379,8 +385,9 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: "#886BC1",
+    paddingBottom: 25,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
   },
 
   headerRow: {
