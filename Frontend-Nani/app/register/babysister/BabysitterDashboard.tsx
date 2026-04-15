@@ -19,6 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 import {
+  Home,
   Bell,
   Calendar,
   Clock,
@@ -33,6 +34,7 @@ import {
 export default function BabysitterDashboard() {
   const router = useRouter();
 
+  const [activeNav, setActiveNav] = useState("home");
   const [activeTab, setActiveTab] = useState("home");
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -693,22 +695,31 @@ export default function BabysitterDashboard() {
       </ScrollView>
 
       <View style={styles.navbar}>
+        {/* INICIO */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => setActiveTab("home")}
+          onPress={() => {
+            setActiveNav("home");
+            router.push("./BabysitterDashboard");
+          }}
         >
-          <Calendar color={activeTab === "home" ? "#FF768A" : "#999"} />
+          <Home color={activeNav === "home" ? "#FF768A" : "#999"} />
           <Text style={styles.navText}>Inicio</Text>
         </TouchableOpacity>
 
+        {/* RESERVAS */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push("./BabysitterBookingHistory")}
+          onPress={() => {
+            setActiveNav("reservas");
+            router.push("./BabysitterBookingHistory");
+          }}
         >
-          <Clock color="#999" />
+          <Calendar color={activeNav === "reservas" ? "#FF768A" : "#999"} />
           <Text style={styles.navText}>Reservas</Text>
         </TouchableOpacity>
 
+        {/* CHATS */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.push("./Babysitterchats")}
@@ -717,6 +728,7 @@ export default function BabysitterDashboard() {
           <Text style={styles.navText}>Chats</Text>
         </TouchableOpacity>
 
+        {/* PERFIL */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.push("./BabysitterOwnProfile")}

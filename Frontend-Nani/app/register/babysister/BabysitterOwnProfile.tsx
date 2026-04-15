@@ -10,6 +10,8 @@ import {
   Alert,
 } from "react-native";
 import { router } from "expo-router";
+import { useRouter } from "expo-router";
+import { Home, Calendar, MessageCircle, User } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ArrowLeft,
@@ -23,6 +25,8 @@ import * as ImagePicker from "expo-image-picker";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 export default function BabysitterOwnProfile() {
+  const router = useRouter();
+  const [activeNav, setActiveNav] = useState("perfil");
   const [activeTab, setActiveTab] = useState<"profile" | "bookings">("profile");
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -188,160 +192,202 @@ export default function BabysitterOwnProfile() {
     : [];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={handleChangePhoto}>
-          <Image source={{ uri: profileImage }} style={styles.headerImage} />
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 90 }}>
+        <View style={styles.headerContainer}>
+          <TouchableOpacity onPress={handleChangePhoto}>
+            <Image source={{ uri: profileImage }} style={styles.headerImage} />
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft size={20} color="#2E2E2E" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <ArrowLeft size={20} color="#2E2E2E" />
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.profileCard}>
-        <View style={styles.profileTop}>
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={styles.name}>{fullName}</Text>
+        <View style={styles.profileCard}>
+          <View style={styles.profileTop}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.name}>{fullName}</Text>
 
-            <View style={styles.row}>
-              <Star size={14} color="#FF768A" />
-              <Text style={styles.rating}>4.9</Text>
-              <Text style={styles.reviews}>(127 reseñas)</Text>
+              <View style={styles.row}>
+                <Star size={14} color="#FF768A" />
+                <Text style={styles.rating}>4.9</Text>
+                <Text style={styles.reviews}>(127 reseñas)</Text>
+              </View>
+
+              <View style={styles.row}>
+                <MapPin size={14} color="#888" />
+                <Text style={styles.location}>{ubicacion}</Text>
+              </View>
             </View>
 
-            <View style={styles.row}>
-              <MapPin size={14} color="#888" />
-              <Text style={styles.location}>{ubicacion}</Text>
+            <View>
+              <Text style={styles.price}>L {profile?.tarifa ?? 0}</Text>
+              <Text style={styles.priceLabel}>por hora</Text>
             </View>
           </View>
 
-          <View>
-            <Text style={styles.price}>L {profile?.tarifa ?? 0}</Text>
-            <Text style={styles.priceLabel}>por hora</Text>
+          <View style={styles.badges}>
+            {profile?.verificada && (
+              <View style={styles.badge}>
+                <Shield size={14} color="#886BC1" />
+                <Text style={{ fontSize: 12 }}>Verificada</Text>
+              </View>
+            )}
+
+            <View style={styles.badge}>
+              <Award size={14} color="#886BC1" />
+              <Text style={{ fontSize: 12 }}>
+                {profile?.experiencia || "Sin experiencia registrada"}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.badges}>
-          {profile?.verificada && (
-            <View style={styles.badge}>
-              <Shield size={14} color="#886BC1" />
-              <Text style={{ fontSize: 12 }}>Verificada</Text>
-            </View>
-          )}
-
-          <View style={styles.badge}>
-            <Award size={14} color="#886BC1" />
-            <Text style={{ fontSize: 12 }}>
-              {profile?.experiencia || "Sin experiencia registrada"}
+        <View style={styles.statsRow}>
+          <View style={styles.statCardPurple}>
+            <Text style={styles.statValue}>L 2,450</Text>
+            <Text style={[styles.statLabel, { color: "white" }]}>
+              Ganado este mes
             </Text>
           </View>
-        </View>
-      </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCardPurple}>
-          <Text style={styles.statValue}>L 2,450</Text>
-          <Text style={[styles.statLabel, { color: "white" }]}>
-            Ganado este mes
-          </Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statValuePurple}>87</Text>
-          <Text style={styles.statLabel}>Reservas completadas</Text>
-        </View>
-      </View>
-
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "profile" && styles.activeTab,
-          ]}
-          onPress={() => setActiveTab("profile")}
-        >
-          <Text
-            style={
-              activeTab === "profile" ? styles.tabTextActive : styles.tabText
-            }
-          >
-            Mi Perfil
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "bookings" && styles.activeTab,
-          ]}
-          onPress={() => setActiveTab("bookings")}
-        >
-          <Text
-            style={
-              activeTab === "bookings" ? styles.tabTextActive : styles.tabText
-            }
-          >
-            Reservas
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeTab === "profile" && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Presentación</Text>
-            <TouchableOpacity onPress={() => router.push("./EditPresentation")}>
-              <Text style={styles.editText}>Editar</Text>
-            </TouchableOpacity>
+          <View style={styles.statCard}>
+            <Text style={styles.statValuePurple}>87</Text>
+            <Text style={styles.statLabel}>Reservas completadas</Text>
           </View>
-          <Text style={styles.about}>{presentacion}</Text>
+        </View>
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Habilidades</Text>
-            <TouchableOpacity onPress={() => router.push("./EditSkills")}>
-              <Text style={styles.editText}>Editar</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === "profile" && styles.activeTab,
+            ]}
+            onPress={() => setActiveTab("profile")}
+          >
+            <Text
+              style={
+                activeTab === "profile" ? styles.tabTextActive : styles.tabText
+              }
+            >
+              Mi Perfil
+            </Text>
+          </TouchableOpacity>
 
-          <View style={styles.skillWrap}>
-            {habilidades.length > 0 ? (
-              habilidades.map((skill: any, i: number) => (
-                <View key={i} style={styles.skill}>
-                  <Text style={{ fontSize: 13 }}>
-                    {skill?.nombre || skill?.descripcion || String(skill)}
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === "bookings" && styles.activeTab,
+            ]}
+            onPress={() => setActiveTab("bookings")}
+          >
+            <Text
+              style={
+                activeTab === "bookings" ? styles.tabTextActive : styles.tabText
+              }
+            >
+              Reservas
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === "profile" && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Presentación</Text>
+              <TouchableOpacity onPress={() => router.push("./EditPresentation")}>
+                <Text style={styles.editText}>Editar</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.about}>{presentacion}</Text>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Habilidades</Text>
+              <TouchableOpacity onPress={() => router.push("./EditSkills")}>
+                <Text style={styles.editText}>Editar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.skillWrap}>
+              {habilidades.length > 0 ? (
+                habilidades.map((skill: any, i: number) => (
+                  <View key={i} style={styles.skill}>
+                    <Text style={{ fontSize: 13 }}>
+                      {skill?.nombre || skill?.descripcion || String(skill)}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.about}>No hay habilidades registradas.</Text>
+              )}
+            </View>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Certificaciones</Text>
+              <TouchableOpacity
+                onPress={() => router.push("./EditCertifications")}
+              >
+                <Text style={styles.editText}>Editar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {certificaciones.length > 0 ? (
+              certificaciones.map((cert: any, i: number) => (
+                <View key={i} style={styles.certRow}>
+                  <CheckCircle size={16} color="#FF768A" />
+                  <Text style={styles.certText}>
+                    {cert?.nombre || cert?.descripcion || String(cert)}
                   </Text>
                 </View>
               ))
             ) : (
-              <Text style={styles.about}>No hay habilidades registradas.</Text>
+              <Text style={styles.about}>No hay certificaciones registradas.</Text>
             )}
           </View>
+        )}
+      </ScrollView>
+      <View style={styles.navbar}>
+        {/* INICIO */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            setActiveNav("home");
+            router.push("./BabysitterDashboard");
+          }}
+        >
+          <Home color={activeNav === "home" ? "#FF768A" : "#999"} />
+          <Text style={styles.navText}>Inicio</Text>
+        </TouchableOpacity>
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Certificaciones</Text>
-            <TouchableOpacity
-              onPress={() => router.push("./EditCertifications")}
-            >
-              <Text style={styles.editText}>Editar</Text>
-            </TouchableOpacity>
-          </View>
+        {/* RESERVAS */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            setActiveNav("reservas");
+            router.push("./BabysitterBookingHistory");
+          }}
+        >
+          <Calendar color={activeNav === "reservas" ? "#FF768A" : "#999"} />
+          <Text style={styles.navText}>Reservas</Text>
+        </TouchableOpacity>
 
-          {certificaciones.length > 0 ? (
-            certificaciones.map((cert: any, i: number) => (
-              <View key={i} style={styles.certRow}>
-                <CheckCircle size={16} color="#FF768A" />
-                <Text style={styles.certText}>
-                  {cert?.nombre || cert?.descripcion || String(cert)}
-                </Text>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.about}>No hay certificaciones registradas.</Text>
-          )}
-        </View>
-      )}
-    </ScrollView>
+        {/* CHATS */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("./Babysitterchats")}
+        >
+          <MessageCircle color="#999" />
+          <Text style={styles.navText}>Chats</Text>
+        </TouchableOpacity>
+
+        {/* PERFIL */}
+        <TouchableOpacity style={styles.navItem}>
+          <User color={activeNav === "perfil" ? "#FF768A" : "#999"} />
+          <Text style={styles.navText}>Perfil</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -455,5 +501,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#374151",
     flex: 1,
+  },
+
+  navbar: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    padding: 15,
+    backgroundColor: "white",
+    borderTopWidth: 1,
+    borderColor: "#eee",
+  },
+
+  navItem: {
+    alignItems: "center",
+  },
+
+  navText: {
+    fontSize: 11,
   },
 });

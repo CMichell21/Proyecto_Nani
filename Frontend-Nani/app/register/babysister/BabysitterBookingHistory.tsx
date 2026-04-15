@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
+import { Home, Calendar, MessageCircle, User } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Image,
@@ -32,6 +34,10 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeNav, setActiveNav] = useState("reservas");
+  const [activeTab, setActiveTab] = useState("reservas");
+
+  const router = useRouter();
 
   const normalizeStatus = (
     estado: string,
@@ -186,7 +192,7 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView>
+      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
         <LinearGradient
           colors={["#886BC1", "#FF768A"]}
           start={{ x: 0, y: 0 }}
@@ -367,6 +373,49 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
           )}
         </View>
       </ScrollView>
+      <View style={styles.navbar}>
+        {/* INICIO */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            setActiveNav("home");
+            router.push("./BabysitterDashboard");
+          }}
+        >
+          <Home color={activeNav === "home" ? "#FF768A" : "#999"} />
+          <Text style={styles.navText}>Inicio</Text>
+        </TouchableOpacity>
+
+        {/* RESERVAS */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            setActiveNav("reservas");
+            router.push("./BabysitterBookingHistory");
+          }}
+        >
+          <Calendar color={activeNav === "reservas" ? "#FF768A" : "#999"} />
+          <Text style={styles.navText}>Reservas</Text>
+        </TouchableOpacity>
+
+        {/* CHATS */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("./Babysitterchats")}
+        >
+          <MessageCircle color="#999" />
+          <Text style={styles.navText}>Chats</Text>
+        </TouchableOpacity>
+
+        {/* PERFIL */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("./BabysitterOwnProfile")}
+        >
+          <User color="#999" />
+          <Text style={styles.navText}>Perfil</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -568,4 +617,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   rejected: { color: "#DC2626", fontSize: 12, fontWeight: "600" },
+
+  navbar: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    padding: 15,
+    backgroundColor: "white",
+    borderTopWidth: 1,
+    borderColor: "#eee",
+  },
+
+  navItem: {
+    alignItems: "center",
+  },
+
+  navText: {
+    fontSize: 11,
+  },
 });
