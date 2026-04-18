@@ -152,8 +152,8 @@ export default function ClientRegistrationForm() {
       console.log("📥 Respuesta del servidor:", result);
 
       if (response.ok) {
-        const successTitle = "¡Cuenta creada!";
-        const successMsg = "Ya eres parte de Nani. Por favor, inicia sesión.";
+        const successTitle = "Cuenta creada";
+        const successMsg = "Te enviamos un correo de verificacion. Abre el enlace antes de iniciar sesion.";
 
         if (Platform.OS === 'web') {
           window.alert(`${successTitle}\n${successMsg}`);
@@ -357,3 +357,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 });
+

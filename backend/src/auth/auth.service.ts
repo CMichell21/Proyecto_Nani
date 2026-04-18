@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -8,10 +10,155 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterNineraDto } from './dto/register-ninera.dto';
 import { RegisterClienteDto } from './dto/register-cliente.dto';
+import { createHash, randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
   constructor(private readonly supabaseService: SupabaseService) {}
+
+  private getVerificationBaseUrl() {
+    const baseUrl = process.env.BACKEND_PUBLIC_URL?.trim();
+
+    if (!baseUrl) {
+      throw new InternalServerErrorException(
+        'Configura BACKEND_PUBLIC_URL para enviar correos de verificacion',
+      );
+    }
+
+    return baseUrl.replace(/\/$/, '');
+  }
+
+  private getEmailFrom() {
+    const emailFrom = process.env.RESEND_FROM_EMAIL?.trim();
+
+    if (!emailFrom) {
+      throw new InternalServerErrorException(
+        'Configura RESEND_FROM_EMAIL para enviar correos de verificacion',
+      );
+    }
+
+    return emailFrom;
+  }
+
+  private getResendApiKey() {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+
+    if (!apiKey) {
+      throw new InternalServerErrorException(
+        'Configura RESEND_API_KEY para enviar correos de verificacion',
+      );
+    }
+
+    return apiKey;
+  }
+
+  private hashVerificationToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private buildVerificationHtml(verificationUrl: string, nombre?: string | null) {
+    const saludo = nombre?.trim() ? `Hola ${nombre.trim()},` : 'Hola,';
+
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937;">
+        <h1 style="color: #111827;">Verifica tu correo en Nani</h1>
+        <p>${saludo}</p>
+        <p>Gracias por registrarte. Para activar tu cuenta de cliente, confirma tu correo con el siguiente boton:</p>
+        <p style="margin: 32px 0;">
+          <a href="${verificationUrl}" style="background: #ff768a; color: white; padding: 14px 22px; border-radius: 10px; text-decoration: none; display: inline-block;">Verificar mi correo</a>
+        </p>
+        <p>Si el boton no abre, copia este enlace en tu navegador:</p>
+        <p style="word-break: break-all;">${verificationUrl}</p>
+        <p>Este enlace vence en 24 horas.</p>
+      </div>
+    `;
+  }
+
+  private renderVerificationPage(options: {
+    title: string;
+    message: string;
+    accent: string;
+  }) {
+    return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${options.title}</title>
+  </head>
+  <body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a;">
+    <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
+      <section style="max-width:560px;width:100%;background:#fff;border-radius:24px;padding:32px;box-shadow:0 20px 40px rgba(15,23,42,.08);text-align:center;">
+        <div style="width:72px;height:72px;border-radius:9999px;background:${options.accent};margin:0 auto 20px;"></div>
+        <h1 style="margin:0 0 12px;font-size:28px;">${options.title}</h1>
+        <p style="margin:0;font-size:16px;line-height:1.6;">${options.message}</p>
+      </section>
+    </main>
+  </body>
+</html>`;
+  }
+
+  private async sendVerificationEmail(params: {
+    correo: string;
+    nombre?: string | null;
+    token: string;
+  }) {
+    const verificationUrl = `${this.getVerificationBaseUrl()}/auth/verify-email?token=${encodeURIComponent(params.token)}`;
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.getResendApiKey()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: this.getEmailFrom(),
+        to: params.correo,
+        subject: 'Verifica tu correo en Nani',
+        html: this.buildVerificationHtml(verificationUrl, params.nombre),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new InternalServerErrorException(
+        `No se pudo enviar el correo de verificacion: ${errorText}`,
+      );
+    }
+  }
+
+  private async createAndSendVerificationEmail(params: {
+    clienteId: string;
+    correo: string;
+    nombre?: string | null;
+  }) {
+    const admin = this.supabaseService.getAdminClient();
+    const token = randomBytes(32).toString('hex');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const { error: updateError } = await admin
+      .from('cliente')
+      .update({
+        email_verificado: false,
+        email_verification_token_hash: this.hashVerificationToken(token),
+        email_verification_sent_at: now.toISOString(),
+        email_verification_expires_at: expiresAt.toISOString(),
+      })
+      .eq('id', params.clienteId);
+
+    if (updateError) {
+      throw new InternalServerErrorException(
+        `No se pudo guardar el token de verificacion: ${updateError.message}`,
+      );
+    }
+
+    await this.sendVerificationEmail({
+      correo: params.correo,
+      nombre: params.nombre,
+      token,
+    });
+  }
 
   async login(dto: LoginDto) {
     const supabase = this.supabaseService.getPublicClient();
@@ -39,7 +186,8 @@ export class AuthService {
           correo,
           rol,
           fecha_registro,
-          ninera ( verificada )
+          ninera ( verificada ),
+          cliente ( email_verificado )
         `,
         )
         .eq('auth_id', authUserId)
@@ -70,11 +218,32 @@ export class AuthService {
         }
       }
 
+      if (usuario.rol === 'cliente') {
+        const datosCliente = Array.isArray(usuario.cliente)
+          ? usuario.cliente[0]
+          : usuario.cliente;
+
+        if (!datosCliente?.email_verificado) {
+          throw new ForbiddenException({
+            message:
+              'Debes verificar tu correo antes de iniciar sesion. Revisa tu bandeja de entrada.',
+            requiresEmailVerification: true,
+            correo: usuario.correo,
+          });
+        }
+      }
+
       const datosNinera =
         usuario.rol === 'ninera'
           ? Array.isArray(usuario.ninera)
             ? usuario.ninera[0]
             : usuario.ninera
+          : null;
+      const datosCliente =
+        usuario.rol === 'cliente'
+          ? Array.isArray(usuario.cliente)
+            ? usuario.cliente[0]
+            : usuario.cliente
           : null;
 
       return {
@@ -82,6 +251,10 @@ export class AuthService {
         session: authData.session,
         user: {
           ...usuario,
+          email_verificado:
+            usuario.rol === 'cliente'
+              ? datosCliente?.email_verificado ?? false
+              : null,
           verificada:
             usuario.rol === 'ninera' ? datosNinera?.verificada ?? false : null,
         },
@@ -90,6 +263,7 @@ export class AuthService {
       console.error('Error en login:', err);
 
       if (
+        err instanceof ForbiddenException ||
         err instanceof UnauthorizedException ||
         err instanceof InternalServerErrorException
       ) {
@@ -139,6 +313,7 @@ export class AuthService {
           .select(
             `
             id,
+            email_verificado,
             persona:persona_id (
               id,
               nombre,
@@ -167,6 +342,7 @@ export class AuthService {
           correo: usuario.correo,
           rol: usuario.rol,
           fecha_registro: usuario.fecha_registro,
+          email_verificado: cliente?.email_verificado ?? false,
           persona: cliente?.persona || null,
         };
       }
@@ -549,15 +725,36 @@ export class AuthService {
       const { error: cError } = await admin.from('cliente').insert({
         persona_id: persona.id,
         usuario_id: usuario.id,
+        email_verificado: false,
       });
 
       if (cError) {
         throw new BadRequestException(`Error en tabla cliente: ${cError.message}`);
       }
 
+      const { data: clienteCreado, error: clienteFetchError } = await admin
+        .from('cliente')
+        .select('id')
+        .eq('usuario_id', usuario.id)
+        .maybeSingle();
+
+      if (clienteFetchError || !clienteCreado) {
+        throw new InternalServerErrorException(
+          `No se pudo obtener el cliente creado: ${clienteFetchError?.message || 'Sin resultados'}`,
+        );
+      }
+
+      await this.createAndSendVerificationEmail({
+        clienteId: clienteCreado.id,
+        correo: dto.correo,
+        nombre: dto.nombre,
+      });
+
       return {
-        message: 'Cliente registrado con éxito',
+        message:
+          'Cliente registrado con exito. Te enviamos un correo para verificar tu cuenta.',
         userId: authCreated.user.id,
+        requiresEmailVerification: true,
       };
     } catch (err) {
       console.error('Error en registerCliente:', err);
@@ -573,6 +770,150 @@ export class AuthService {
         'Error interno al registrar cliente',
       );
     }
+  }
+
+  async resendClienteVerificationEmail(correo: string) {
+    const admin = this.supabaseService.getAdminClient();
+    const normalizedEmail = correo.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new BadRequestException('El correo es obligatorio');
+    }
+
+    const { data: usuario, error: usuarioError } = await admin
+      .from('usuario')
+      .select(
+        `
+        id,
+        correo,
+        rol,
+        cliente (
+          id,
+          email_verificado,
+          persona:persona_id (
+            nombre
+          )
+        )
+      `,
+      )
+      .eq('correo', normalizedEmail)
+      .eq('rol', 'cliente')
+      .maybeSingle();
+
+    if (usuarioError) {
+      throw new InternalServerErrorException(
+        `Error consultando usuario: ${usuarioError.message}`,
+      );
+    }
+
+    if (!usuario) {
+      throw new NotFoundException('No existe un cliente con ese correo');
+    }
+
+    const cliente = Array.isArray(usuario.cliente)
+      ? usuario.cliente[0]
+      : usuario.cliente;
+
+    if (!cliente) {
+      throw new BadRequestException('No se encontro el perfil del cliente');
+    }
+
+    if (cliente.email_verificado) {
+      return {
+        message: 'Este correo ya esta verificado. Ya puedes iniciar sesion.',
+        alreadyVerified: true,
+      };
+    }
+
+    const persona = Array.isArray(cliente.persona)
+      ? cliente.persona[0]
+      : cliente.persona;
+
+    await this.createAndSendVerificationEmail({
+      clienteId: cliente.id,
+      correo: normalizedEmail,
+      nombre: persona?.nombre,
+    });
+
+    return {
+      message: 'Te enviamos un nuevo correo de verificacion.',
+      requiresEmailVerification: true,
+    };
+  }
+
+  async verifyClienteEmail(token: string) {
+    const admin = this.supabaseService.getAdminClient();
+
+    if (!token?.trim()) {
+      return this.renderVerificationPage({
+        title: 'Enlace invalido',
+        message: 'El enlace de verificacion no incluye un token valido.',
+        accent: '#f59e0b',
+      });
+    }
+
+    const { data: cliente, error } = await admin
+      .from('cliente')
+      .select('id, email_verificado, email_verification_expires_at')
+      .eq('email_verification_token_hash', this.hashVerificationToken(token))
+      .maybeSingle();
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Error consultando token: ${error.message}`,
+      );
+    }
+
+    if (!cliente) {
+      return this.renderVerificationPage({
+        title: 'Enlace no valido',
+        message:
+          'No encontramos una solicitud de verificacion con este enlace. Pide un nuevo correo desde la app.',
+        accent: '#ef4444',
+      });
+    }
+
+    if (cliente.email_verificado) {
+      return this.renderVerificationPage({
+        title: 'Correo ya verificado',
+        message: 'Tu cuenta ya estaba verificada. Ya puedes iniciar sesion en Nani.',
+        accent: '#22c55e',
+      });
+    }
+
+    if (
+      cliente.email_verification_expires_at &&
+      new Date(cliente.email_verification_expires_at).getTime() < Date.now()
+    ) {
+      return this.renderVerificationPage({
+        title: 'Enlace vencido',
+        message:
+          'Este enlace ya vencio. Vuelve a la app y solicita un nuevo correo de verificacion.',
+        accent: '#f59e0b',
+      });
+    }
+
+    const { error: updateError } = await admin
+      .from('cliente')
+      .update({
+        email_verificado: true,
+        email_verificado_at: new Date().toISOString(),
+        email_verification_token_hash: null,
+        email_verification_expires_at: null,
+      })
+      .eq('id', cliente.id);
+
+    if (updateError) {
+      throw new InternalServerErrorException(
+        `No se pudo actualizar la verificacion: ${updateError.message}`,
+      );
+    }
+
+    return this.renderVerificationPage({
+      title: 'Correo verificado',
+      message: 'Tu cuenta ya quedo verificada. Ahora si puedes iniciar sesion en Nani.',
+      accent: '#22c55e',
+    });
   }
 
   async completeProfile(userId: string, dto: any, files: any) {
@@ -781,3 +1122,5 @@ export class AuthService {
     }
   }
 }
+
+

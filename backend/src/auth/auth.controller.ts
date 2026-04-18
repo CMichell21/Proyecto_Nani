@@ -3,12 +3,15 @@ import {
   Body,
   Controller,
   Get,
-  Post,
-  UseInterceptors,
-  UploadedFiles,
   Headers,
   InternalServerErrorException,
+  Post,
+  Query,
+  Res,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -127,6 +130,22 @@ export class AuthController {
     },
   ) {
     return this.authService.registerCliente(dto, files);
+  }
+
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string, @Res() res: Response) {
+    const html = await this.authService.verifyClienteEmail(token);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(html);
+  }
+
+  @Post('verify-email/resend')
+  async resendVerificationEmail(@Body('correo') correo: string) {
+    if (!correo) {
+      throw new BadRequestException('El correo es obligatorio');
+    }
+
+    return this.authService.resendClienteVerificationEmail(correo);
   }
 
   @Post('complete-profile')
