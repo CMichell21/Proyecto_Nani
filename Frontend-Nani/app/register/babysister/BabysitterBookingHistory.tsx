@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Home, Calendar, MessageCircle, User } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+
 import {
   ActivityIndicator,
   Image,
@@ -16,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Props {
   onBack: () => void;
@@ -30,6 +32,7 @@ type BookingStatus =
   | "rejected";
 
 export default function BabysitterBookingHistory({ onBack }: Props) {
+  const router = useRouter();
   const [filter, setFilter] = useState<BookingStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [bookings, setBookings] = useState<any[]>([]);
@@ -37,7 +40,6 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
   const [activeNav, setActiveNav] = useState("reservas");
   const [activeTab, setActiveTab] = useState("reservas");
 
-  const router = useRouter();
 
   const normalizeStatus = (
     estado: string,
@@ -181,12 +183,14 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#886BC1" />
-        <Text style={{ textAlign: "center", marginTop: 12 }}>
-          Cargando reservas...
-        </Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <View style={[styles.container, styles.centerContent]}>
+          <ActivityIndicator size="large" color="#886BC1" />
+          <Text style={{ textAlign: "center", marginTop: 12 }}>
+            Cargando reservas...
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -200,7 +204,14 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
           style={styles.header}
         >
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() =>
+                onBack
+                  ? onBack()
+                  : router.replace("/register/babysister/BabysitterDashboard")
+              }
+            >
               <Ionicons name="arrow-back" size={20} color="white" />
             </TouchableOpacity>
 
@@ -421,6 +432,10 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#886BC1",
+  },
   container: {
     flex: 1,
     backgroundColor: "#FAFAFA",
@@ -432,7 +447,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    paddingTop: 60,
+    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 25,
     borderBottomLeftRadius: 25,
@@ -635,3 +650,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 });
+
+

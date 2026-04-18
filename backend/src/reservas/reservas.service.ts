@@ -2,10 +2,13 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
+import { CheckinDto } from './dto/chekin.dto';
+import { CheckoutDto } from './dto/checkout.dto';
 import { SupabaseService } from '../supabase/supabase.service';
 
 @Injectable()
@@ -95,6 +98,112 @@ export class ReservasService {
 
     const montoTotalFinal = montoBase + comisionNani + propina;
 
+    const { data: metodoPago, error: metodoPagoError } = await admin
+      .from('metodo_pago')
+      .select('id, nombre')
+      .eq('id', createReservaDto.metodo_pago_id)
+      .single();
+
+    if (metodoPagoError || !metodoPago) {
+      throw new BadRequestException('Metodo de pago no valido.');
+    }
+
+    const esTarjeta = metodoPago.nombre.toLowerCase().includes('tarjeta');
+    const estadoPagoReserva = esTarjeta ? 'completada' : 'pendiente';
+    const estadoPagoRegistro = esTarjeta ? 'completado' : 'pendiente';
+
+    let tarjetaUsada: any = null;
+
+    if (esTarjeta) {
+      const tarjetaGuardadaId = (createReservaDto as any).tarjeta_guardada_id;
+      const nuevaTarjeta = (createReservaDto as any).nueva_tarjeta;
+
+      if (tarjetaGuardadaId) {
+        const { data: tarjetaGuardada, error: tarjetaError } = await admin
+          .from('cliente_tarjeta')
+          .select('id, titular, marca, ultimos_4, vencimiento')
+          .eq('id', tarjetaGuardadaId)
+          .eq('cliente_id', cliente.id)
+          .single();
+
+        if (tarjetaError || !tarjetaGuardada) {
+          throw new BadRequestException('La tarjeta seleccionada no existe.');
+        }
+
+        tarjetaUsada = tarjetaGuardada;
+      } else if (nuevaTarjeta) {
+        const numero = String(nuevaTarjeta.numero ?? '').replace(/\D/g, '');
+        const titular = String(nuevaTarjeta.titular ?? '').trim();
+        const vencimiento = String(nuevaTarjeta.vencimiento ?? '').trim();
+        const cvv = String(nuevaTarjeta.cvv ?? '').replace(/\D/g, '');
+        const marca =
+          String(nuevaTarjeta.marca ?? '').trim() ||
+          (numero.startsWith('4')
+            ? 'Visa'
+            : numero.startsWith('5')
+              ? 'Mastercard'
+              : 'Tarjeta');
+
+        if (titular.length < 3) {
+          throw new BadRequestException(
+            'Debes ingresar el titular de la tarjeta.',
+          );
+        }
+
+        if (numero.length < 13) {
+          throw new BadRequestException(
+            'Debes ingresar un numero de tarjeta valido.',
+          );
+        }
+
+        if (!/^\d{2}\/\d{2}$/.test(vencimiento)) {
+          throw new BadRequestException(
+            'Debes ingresar una fecha de vencimiento valida.',
+          );
+        }
+
+        if (cvv.length < 3) {
+          throw new BadRequestException('Debes ingresar un CVV valido.');
+        }
+
+        const predeterminada = Boolean(nuevaTarjeta.predeterminada);
+
+        if (predeterminada) {
+          await admin
+            .from('cliente_tarjeta')
+            .update({ predeterminada: false })
+            .eq('cliente_id', cliente.id);
+        }
+
+        const { data: tarjetaNueva, error: tarjetaNuevaError } = await admin
+          .from('cliente_tarjeta')
+          .insert({
+            cliente_id: cliente.id,
+            titular,
+            numero,
+            ultimos_4: numero.slice(-4),
+            vencimiento,
+            cvv,
+            marca,
+            predeterminada,
+          })
+          .select('id, titular, marca, ultimos_4, vencimiento')
+          .single();
+
+        if (tarjetaNuevaError || !tarjetaNueva) {
+          throw new BadRequestException(
+            `No se pudo guardar la tarjeta: ${tarjetaNuevaError?.message}`,
+          );
+        }
+
+        tarjetaUsada = tarjetaNueva;
+      } else {
+        throw new BadRequestException(
+          'Debes seleccionar una tarjeta guardada o ingresar una nueva.',
+        );
+      }
+    }
+
     const { data: reserva, error: reservaError } = await admin
       .from('reserva')
       .insert({
@@ -111,7 +220,7 @@ export class ReservasService {
         monto_total: montoTotalFinal,
         monto_comision: comisionNani,
         estado: 'pendiente',
-        estado_pago: 'pendiente',
+        estado_pago: estadoPagoReserva,
       })
       .select()
       .single();
@@ -133,7 +242,7 @@ export class ReservasService {
         cargo_tiempo_adicional: 0,
         propina: Number(propina),
         total_a_recibir: Number(montoTotalFinal),
-        estado_pago: 'pendiente',
+        estado_pago: estadoPagoRegistro,
       })
       .select();
 
@@ -181,6 +290,9 @@ export class ReservasService {
       reservaId: reserva.id,
       codigoReserva: reserva.codigo_reserva,
       montoTotal: reserva.monto_total,
+      paymentStatus: reserva.estado_pago,
+      paymentUpfront: esTarjeta,
+      tarjeta: tarjetaUsada,
       nombreCliente: `${persona.nombre} ${persona.apellido}`,
       correoCliente: usuarioPerfil.correo,
       ninos: detallesNinos,
@@ -327,6 +439,17 @@ export class ReservasService {
         throw new BadRequestException(
           `Estado inválido para reserva: ${patchData.estado}`,
         );
+      }
+
+      if (patchData.estado === 'confirmada') {
+        patchData.estado_comprobacion = 'confirmada';
+      } else if (patchData.estado === 'rechazada') {
+        patchData.estado_comprobacion = 'rechazada';
+      } else if (
+        patchData.estado === 'cancelada' ||
+        patchData.estado === 'completada'
+      ) {
+        patchData.estado_comprobacion = null;
       }
     }
 
@@ -482,8 +605,6 @@ export class ReservasService {
           }`
         : 'Ubicación no especificada';
 
-      console.log('DATA RAW SUPABASE:', JSON.stringify(data, null, 2));
-
       return {
         id: res.id,
         codigo_reserva: res.codigo_reserva,
@@ -524,8 +645,11 @@ export class ReservasService {
       monto_total,
       monto_comision,
       estado,
+      estado_comprobacion,
       duracion_horas,
       notas_importantes,
+      emergencia_activa,
+      motivo_emergencia,
       metodo_pago:metodo_pago_id (nombre),
       direccion:direccion_id (
         direccion_completa,
@@ -581,6 +705,10 @@ export class ReservasService {
     const metodo_pago = getFirst(data.metodo_pago);
     const pago = getFirst(data.pago);
     const seguimiento = getFirst((data as any).seguimiento_sesion);
+    const estadoDetalle =
+      data.estado === 'pendiente' && data.estado_comprobacion === 'confirmada'
+        ? 'confirmada'
+        : data.estado;
 
     return {
       id: data.id,
@@ -603,7 +731,7 @@ export class ReservasService {
       paymentStatus: data.estado_pago || 'pendiente',
       scheduledHours: data.duracion_horas,
       childrenArray: listaNinos,
-      status: data.estado,
+      status: estadoDetalle,
       checkInReal: seguimiento?.hora_entrada_real || null,
       checkOutReal: seguimiento?.hora_salida_real || null,
       tiempoTotalTrabajado: seguimiento?.tiempo_total_trabajado || null,
@@ -612,343 +740,323 @@ export class ReservasService {
       cargo_tiempo_adicional: pago?.cargo_tiempo_adicional || 0,
       tip: pago?.propina || 0,
       total: data.monto_total,
-      paymentMethodName: metodo_pago?.nombre || '',
+      paymentMethod: metodo_pago?.nombre || '',
+      emergencia_activa: (data as any).emergencia_activa ?? false,
+      motivo_emergencia: (data as any).motivo_emergencia ?? null,
     };
   }
 
   async procesarCheckin(
     reservaId: string,
-    body: {
-      qrCode?: string;
-      checkInTime?: string | number;
-    },
+    body: CheckinDto,
+    authUserId: string,
   ) {
     const admin = this.supabaseService.getAdminClient();
 
-    const { data: reserva, error: errorReserva } = await admin
-      .from('reserva')
-      .select('id, estado, codigo_reserva')
-      .eq('id', reservaId)
-      .maybeSingle();
+    const manual: boolean = !!(body as any).manual;
+    const motivo_manual: string = ((body as any).motivo_manual ?? '').trim();
 
-    if (errorReserva) {
-      throw new InternalServerErrorException(
-        `Error consultando reserva: ${errorReserva.message}`,
+    if (manual && motivo_manual.length < 10) {
+      throw new BadRequestException(
+        'Se requiere un motivo de al menos 10 caracteres para el check-in manual.',
       );
     }
 
-    if (!reserva) {
-      throw new NotFoundException('Reserva no encontrada');
-    }
+    const { data: reserva, error: errReserva } = await admin
+      .from('reserva')
+      .select('id, estado, ninera_id')
+      .eq('id', reservaId)
+      .single();
 
+    if (errReserva || !reserva)
+      throw new NotFoundException('Reserva no encontrada.');
     if (reserva.estado !== 'confirmada') {
       throw new BadRequestException(
-        'La reserva debe estar confirmada para registrar entrada',
+        'Solo se puede hacer check-in en reservas con estado "confirmada".',
       );
     }
 
-    const checkInIso = body?.checkInTime
-      ? new Date(Number(body.checkInTime)).toISOString()
-      : new Date().toISOString();
+    const ahora = new Date(parseInt(body.checkInTime));
 
-    const { data: seguimientoExistente, error: errorSeguimiento } = await admin
+    const { data: existing } = await admin
       .from('seguimiento_sesion')
-      .select('id, hora_entrada_real')
+      .select('id')
       .eq('reserva_id', reservaId)
       .maybeSingle();
 
-    if (errorSeguimiento) {
-      throw new InternalServerErrorException(
-        `Error consultando seguimiento: ${errorSeguimiento.message}`,
-      );
-    }
+    const seguimientoData: Record<string, any> = {
+      reserva_id: reservaId,
+      hora_entrada_real: ahora.toISOString(),
+      codigo_qr_entrada: (body as any).qrCode ?? null,
+      checkin_manual: manual,
+      motivo_manual_entrada: manual ? motivo_manual : null,
+    };
 
-    if (seguimientoExistente?.hora_entrada_real) {
-      throw new BadRequestException('La entrada ya fue registrada');
-    }
-
-    if (seguimientoExistente?.id) {
-      const { error: updateSeguimientoError } = await admin
+    if (existing?.id) {
+      await admin
         .from('seguimiento_sesion')
-        .update({
-          hora_entrada_real: checkInIso,
-          codigo_qr_entrada: body?.qrCode || null,
-        })
-        .eq('id', seguimientoExistente.id);
-
-      if (updateSeguimientoError) {
-        throw new InternalServerErrorException(
-          `Error actualizando seguimiento: ${updateSeguimientoError.message}`,
-        );
-      }
+        .update(seguimientoData)
+        .eq('id', existing.id);
     } else {
-      const { error: insertSeguimientoError } = await admin
-        .from('seguimiento_sesion')
-        .insert({
-          reserva_id: reservaId,
-          hora_entrada_real: checkInIso,
-          codigo_qr_entrada: body?.qrCode || null,
-        });
-
-      if (insertSeguimientoError) {
-        throw new InternalServerErrorException(
-          `Error creando seguimiento: ${insertSeguimientoError.message}`,
-        );
-      }
+      await admin.from('seguimiento_sesion').insert(seguimientoData);
     }
 
-    const { data: reservaActualizada, error: errorUpdateReserva } = await admin
+    await admin
       .from('reserva')
-      .update({
-        estado: 'en_progreso',
-      })
-      .eq('id', reservaId)
-      .select()
-      .single();
-
-    if (errorUpdateReserva) {
-      throw new InternalServerErrorException(
-        `Error actualizando reserva: ${errorUpdateReserva.message}`,
-      );
-    }
+      .update({ estado: 'en_progreso' })
+      .eq('id', reservaId);
 
     return {
-      message: 'Check-in registrado con éxito',
-      reserva: reservaActualizada,
-      checkInTime: checkInIso,
+      success: true,
+      message: 'Check-in registrado correctamente.',
+      manual,
     };
   }
 
   async procesarCheckout(
     reservaId: string,
-    body?: {
-      rating?: number;
-      comments?: string;
-      checkInTime?: string | number;
-      checkOutTime?: string | number;
-      totalHours?: number;
-      totalPayment?: number;
-      qrCode?: string;
-    },
+    body: CheckoutDto,
+    authUserId: string,
   ) {
     const admin = this.supabaseService.getAdminClient();
 
-    const { data: reserva, error: errorReserva } = await admin
+    const manual: boolean = !!(body as any).manual;
+    const motivo_manual: string = ((body as any).motivo_manual ?? '').trim();
+
+    if (manual && motivo_manual.length < 10) {
+      throw new BadRequestException(
+        'Se requiere un motivo de al menos 10 caracteres para el check-out manual.',
+      );
+    }
+
+    const { data: seguimiento, error: errSeg } = await admin
+      .from('seguimiento_sesion')
+      .select('id, hora_entrada_real')
+      .eq('reserva_id', reservaId)
+      .maybeSingle();
+
+    if (errSeg || !seguimiento) {
+      throw new NotFoundException(
+        'No se encontró el registro de entrada para esta reserva.',
+      );
+    }
+
+    const entrada = new Date(seguimiento.hora_entrada_real).getTime();
+    const salida = new Date(parseInt(body.checkOutTime)).getTime();
+
+    if (salida <= entrada) {
+      throw new BadRequestException(
+        'La hora de salida no puede ser anterior o igual a la de entrada.',
+      );
+    }
+
+    const totalHorasReales = (salida - entrada) / 1000 / 3600;
+
+    await admin
+      .from('seguimiento_sesion')
+      .update({
+        hora_salida_real: new Date(salida).toISOString(),
+        tiempo_total_trabajado: totalHorasReales.toFixed(4),
+        checkout_manual: manual,
+        motivo_manual_salida: manual ? motivo_manual : null,
+      })
+      .eq('id', seguimiento.id);
+
+    await admin
+      .from('reserva')
+      .update({ estado: 'pendiente_confirmacion' })
+      .eq('id', reservaId);
+
+    return {
+      success: true,
+      message: 'Check-out registrado. Esperando confirmación del cliente.',
+      totalHoras: totalHorasReales.toFixed(4),
+      manual,
+    };
+  }
+
+  async confirmarFinalizacionCliente(reservaId: string, authUserId: string) {
+    const admin = this.supabaseService.getAdminClient();
+
+    const { data: usuario } = await admin
+      .from('usuario')
+      .select('id')
+      .eq('auth_id', authUserId)
+      .single();
+
+    if (!usuario) throw new ForbiddenException('Usuario no encontrado.');
+
+    const { data: cliente } = await admin
+      .from('cliente')
+      .select('id')
+      .eq('usuario_id', usuario.id)
+      .single();
+
+    if (!cliente)
+      throw new ForbiddenException('Perfil de cliente no encontrado.');
+
+    // 3. Obtener Reserva y Seguimiento
+    const { data: reserva, error: errReserva } = await admin
       .from('reserva')
       .select(
         `
-        id,
-        cliente_id,
-        ninera_id,
-        fecha_servicio,
-        hora_inicio,
-        hora_fin,
-        estado,
-        monto_total,
-        estado_pago,
-        pago (
-          id,
-          tarifa_por_hora,
-          servicio_base,
-          propina,
-          cargo_tiempo_adicional,
-          total_a_recibir,
-          estado_pago
-        ),
-        seguimiento_sesion (
-          id,
-          hora_entrada_real,
-          hora_salida_real
-        )
-      `,
+      id,
+      estado,
+      estado_pago,
+      metodo_pago_id,
+      cliente_id,
+      cliente_confirmo_finalizacion,
+      ninera_id,
+      seguimiento_sesion (
+        hora_entrada_real,
+        hora_salida_real,
+        tiempo_total_trabajado
+      )
+    `,
       )
       .eq('id', reservaId)
-      .maybeSingle();
-
-    if (errorReserva) {
-      throw new InternalServerErrorException(
-        `Error consultando reserva: ${errorReserva.message}`,
-      );
-    }
-
-    if (!reserva) {
-      throw new NotFoundException('La reserva no existe');
-    }
-
-    if (reserva.estado !== 'en_progreso') {
-      throw new BadRequestException(
-        'La reserva debe estar en progreso para registrar salida',
-      );
-    }
-
-    const pago = Array.isArray((reserva as any).pago)
-      ? (reserva as any).pago[0]
-      : (reserva as any).pago;
-
-    if (!pago) {
-      throw new BadRequestException(
-        'No se encontró información de pago para esta reserva',
-      );
-    }
-
-    const seguimiento = Array.isArray((reserva as any).seguimiento_sesion)
-      ? (reserva as any).seguimiento_sesion[0]
-      : (reserva as any).seguimiento_sesion;
-
-    const checkInIso = body?.checkInTime
-      ? new Date(Number(body.checkInTime)).toISOString()
-      : seguimiento?.hora_entrada_real;
-
-    if (!checkInIso) {
-      throw new BadRequestException(
-        'No se encontró la hora de entrada para esta sesión',
-      );
-    }
-
-    const checkOutIso = body?.checkOutTime
-      ? new Date(Number(body.checkOutTime)).toISOString()
-      : new Date().toISOString();
-
-    const workedHours =
-      body?.totalHours !== undefined &&
-      body?.totalHours !== null &&
-      Number.isFinite(Number(body.totalHours))
-        ? Number(body.totalHours)
-        : Math.max(
-            0,
-            (new Date(checkOutIso).getTime() - new Date(checkInIso).getTime()) /
-              3600000,
-          );
-
-    if (!Number.isFinite(workedHours) || workedHours < 0) {
-      throw new BadRequestException('El total de horas trabajado es inválido');
-    }
-
-    const tarifaPorHora = Number(pago.tarifa_por_hora) || 0;
-    const propina = Number(pago.propina) || 0;
-    const servicioBase = Number(pago.servicio_base) || 0;
-    const horasProgramadas = Number((pago as any).hora_programada || 0);
-
-    const overtimeHours = Math.max(0, workedHours - horasProgramadas);
-    const cargoTiempoAdicional = overtimeHours * tarifaPorHora;
-
-    const totalFinal =
-      body?.totalPayment !== undefined &&
-      body?.totalPayment !== null &&
-      Number.isFinite(Number(body.totalPayment))
-        ? Number(body.totalPayment)
-        : servicioBase + cargoTiempoAdicional + propina;
-
-    const nuevoEstadoPago =
-      cargoTiempoAdicional > 0 ? 'ajuste_pendiente' : 'completado';
-
-    if (seguimiento?.id) {
-      const { error: updateSeguimientoError } = await admin
-        .from('seguimiento_sesion')
-        .update({
-          hora_entrada_real: checkInIso,
-          hora_salida_real: checkOutIso,
-          tiempo_total_trabajado: this.formatDurationFromHours(workedHours),
-          codigo_qr_salida: body?.qrCode || null,
-        })
-        .eq('id', seguimiento.id);
-
-      if (updateSeguimientoError) {
-        throw new InternalServerErrorException(
-          `Error actualizando seguimiento: ${updateSeguimientoError.message}`,
-        );
-      }
-    } else {
-      const { error: insertSeguimientoError } = await admin
-        .from('seguimiento_sesion')
-        .insert({
-          reserva_id: reservaId,
-          hora_entrada_real: checkInIso,
-          hora_salida_real: checkOutIso,
-          tiempo_total_trabajado: this.formatDurationFromHours(workedHours),
-          codigo_qr_salida: body?.qrCode || null,
-        });
-
-      if (insertSeguimientoError) {
-        throw new InternalServerErrorException(
-          `Error creando seguimiento: ${insertSeguimientoError.message}`,
-        );
-      }
-    }
-
-    const { error: errorUpdatePago } = await admin
-      .from('pago')
-      .update({
-        cargo_tiempo_adicional: Number(cargoTiempoAdicional.toFixed(2)),
-        total_a_recibir: Number(totalFinal.toFixed(2)),
-        estado_pago: nuevoEstadoPago,
-      })
-      .eq('id', pago.id);
-
-    if (errorUpdatePago) {
-      throw new BadRequestException(
-        `Error al actualizar pago: ${errorUpdatePago.message}`,
-      );
-    }
-
-    const { data: reservaFinalizada, error: errorUpdateReserva } = await admin
-      .from('reserva')
-      .update({
-        estado: 'completada',
-        estado_pago: nuevoEstadoPago,
-        monto_total: Number(totalFinal.toFixed(2)),
-      })
-      .eq('id', reservaId)
-      .select()
       .single();
 
-    if (errorUpdateReserva) {
-      throw new BadRequestException(
-        `Error al finalizar reserva: ${errorUpdateReserva.message}`,
+    if (errReserva || !reserva)
+      throw new NotFoundException('Reserva no encontrada.');
+
+    if (cliente.id !== reserva.cliente_id) {
+      throw new ForbiddenException(
+        'No tienes permiso para confirmar esta reserva.',
       );
     }
 
-    if (
-      body?.rating &&
-      Number(body.rating) >= 1 &&
-      Number(body.rating) <= 5 &&
-      reserva.cliente_id &&
-      reserva.ninera_id
-    ) {
-      const { data: nineraData } = await admin
-        .from('ninera')
-        .select('usuario_id')
-        .eq('id', reserva.ninera_id)
-        .maybeSingle();
+    const estadosElegibles = [
+      'pendiente_confirmacion',
+      'completada',
+      'en_progreso',
+    ];
+    if (!estadosElegibles.includes(reserva.estado)) {
+      throw new BadRequestException(
+        `No se puede confirmar en estado "${reserva.estado}".`,
+      );
+    }
 
-      const { data: clienteData } = await admin
-        .from('cliente')
-        .select('usuario_id')
-        .eq('id', reserva.cliente_id)
-        .maybeSingle();
+    const { data: pago } = await admin
+      .from('pago')
+      .select('tarifa_por_hora, estado_pago')
+      .eq('reserva_id', reservaId)
+      .maybeSingle();
 
-      if (nineraData?.usuario_id && clienteData?.usuario_id) {
-        await admin.from('resena').upsert(
-          {
-            reserva_id: reservaId,
-            autor_id: nineraData.usuario_id,
-            receptor_id: clienteData.usuario_id,
-            puntuacion: Number(body.rating),
-            comentario: body.comments || null,
-          },
-          { onConflict: 'reserva_id' },
-        );
-      }
+    const { data: metodoPago } = await admin
+      .from('metodo_pago')
+      .select('nombre')
+      .eq('id', (reserva as any).metodo_pago_id)
+      .maybeSingle();
+
+    const seg: any = Array.isArray(reserva.seguimiento_sesion)
+      ? reserva.seguimiento_sesion[0]
+      : reserva.seguimiento_sesion;
+
+    const tarifaPorHora = parseFloat(pago?.tarifa_por_hora ?? '0');
+    const horasTrabajadas = parseFloat(seg?.tiempo_total_trabajado ?? '0');
+    const totalCalculado = +(horasTrabajadas * tarifaPorHora).toFixed(2);
+    const metodoPagoNombre = metodoPago?.nombre || '';
+    const esTarjetaReal = metodoPagoNombre.toLowerCase().includes('tarjeta');
+    const pagoYaCompletado =
+      reserva.estado_pago === 'completada' || pago?.estado_pago === 'completado';
+
+
+    const updateReserva: any = {
+      estado: 'completada',
+      cliente_confirmo_finalizacion: true,
+      fecha_confirmacion_cliente: new Date().toISOString(),
+      total_calculado: totalCalculado,
+    };
+
+    const updatePago: any = {
+      total_a_recibir: totalCalculado,
+    };
+
+    if (esTarjetaReal && !pagoYaCompletado) {
+      updateReserva.estado_pago = 'completada';
+      updatePago.estado_pago = 'completado';
+    }
+
+    await admin.from('reserva').update(updateReserva).eq('id', reservaId);
+
+    if (pago) {
+      await admin.from('pago').update(updatePago).eq('reserva_id', reservaId);
     }
 
     return {
-      message: 'Checkout procesado con éxito',
-      reserva: reservaFinalizada,
-      checkInTime: checkInIso,
-      checkOutTime: checkOutIso,
-      workedHours: Number(workedHours.toFixed(2)),
-      cargosAdicionales: Number(cargoTiempoAdicional.toFixed(2)),
-      totalFinal: Number(totalFinal.toFixed(2)),
+      success: true,
+      message: esTarjetaReal
+        ? 'Finalización y pago con tarjeta confirmados.'
+        : 'Finalización confirmada. Pendiente confirmación de cobro en efectivo por la niñera.',
+      horas_trabajadas: horasTrabajadas.toFixed(2),
+      total_calculado: totalCalculado,
+      metodo_pago: metodoPagoNombre,
+    };
+  }
+
+  async confirmarCobroEfectivoNinera(reservaId: string, authUserId: string) {
+    const admin = this.supabaseService.getAdminClient();
+
+    const { data: usuario, error: errUser } = await admin
+      .from('usuario')
+      .select('id')
+      .eq('auth_id', authUserId)
+      .single();
+
+    if (!usuario) throw new ForbiddenException('Usuario no encontrado.');
+
+    const { data: ninera } = await admin
+      .from('ninera')
+      .select('id')
+      .eq('usuario_id', usuario.id)
+      .single();
+    if (!ninera)
+      throw new ForbiddenException('Perfil de niñera no encontrado.');
+
+    const { data: reserva, error: errReserva } = await admin
+      .from('reserva')
+      .select('*')
+      .eq('id', reservaId)
+      .single();
+
+    if (errReserva || !reserva)
+      throw new NotFoundException('Reserva no encontrada.');
+    if (ninera.id !== reserva.ninera_id) {
+      throw new ForbiddenException('No tienes permiso sobre esta reserva.');
+    }
+
+    const { data: pago, error: errPago } = await admin
+      .from('pago')
+      .select('*')
+      .eq('reserva_id', reservaId)
+      .single();
+
+    if (errPago || !pago) {
+      throw new NotFoundException('Pago no encontrado.');
+    }
+
+    await admin
+      .from('reserva')
+      .update({
+        estado_pago: 'completada',
+      })
+      .eq('id', reservaId);
+
+    if (pago) {
+      await admin
+        .from('pago')
+        .update({
+          total_a_recibir: reserva.monto_total,
+          estado_pago: 'completado',
+        })
+        .eq('reserva_id', reservaId);
+    }
+
+    return {
+      success: true,
+      message: 'Cobro en efectivo confirmado correctamente',
+      total_calculado: reserva.monto_total,
     };
   }
 
@@ -1056,6 +1164,74 @@ export class ReservasService {
     };
   }
 
+  async reportarEmergencia(
+    reservaId: string,
+    motivo: string,
+    authUserId: string,
+  ) {
+    const admin = this.supabaseService.getAdminClient();
+
+    if (!motivo || motivo.trim().length < 5) {
+      throw new BadRequestException(
+        'Debes describir la emergencia (mínimo 5 caracteres).',
+      );
+    }
+
+    // Verificar que la niñera es la asignada a esta reserva
+    const { data: usuario } = await admin
+      .from('usuario')
+      .select('id')
+      .eq('auth_id', authUserId)
+      .maybeSingle();
+
+    if (!usuario) throw new BadRequestException('Usuario no encontrado.');
+
+    const { data: ninera } = await admin
+      .from('ninera')
+      .select('id')
+      .eq('usuario_id', usuario.id)
+      .maybeSingle();
+
+    if (!ninera) throw new BadRequestException('Perfil de niñera no encontrado.');
+
+    const { data: reserva, error: errReserva } = await admin
+      .from('reserva')
+      .select('id, estado, ninera_id')
+      .eq('id', reservaId)
+      .maybeSingle();
+
+    if (errReserva || !reserva)
+      throw new NotFoundException('Reserva no encontrada.');
+
+    if (ninera.id !== reserva.ninera_id)
+      throw new ForbiddenException('No tienes permiso sobre esta reserva.');
+
+    if (reserva.estado !== 'en_progreso') {
+      throw new BadRequestException(
+        'Solo se puede reportar una emergencia cuando el servicio está en progreso.',
+      );
+    }
+
+    const { error } = await admin
+      .from('reserva')
+      .update({
+        emergencia_activa: true,
+        motivo_emergencia: motivo.trim(),
+      })
+      .eq('id', reservaId);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Error al registrar la emergencia: ${error.message}`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Emergencia reportada. El padre de familia fue notificado.',
+    };
+  }
+
   async cancelarReserva(reservaId: string, motivo: string, authUserId: string) {
     const admin = this.supabaseService.getAdminClient();
 
@@ -1153,3 +1329,6 @@ export class ReservasService {
     };
   }
 }
+
+
+

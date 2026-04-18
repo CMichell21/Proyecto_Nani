@@ -23,7 +23,7 @@ type NotificationItem = {
   color: string;
 };
 
-export default function BabysitterNotifications() {
+export default function Notifications() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +38,8 @@ export default function BabysitterNotifications() {
         return;
       }
 
-      const response = await fetch(ENDPOINTS.get_notificaciones_ninera(userId));
-      const data = await response.json();
+      const response = await fetch(ENDPOINTS.get_notificaciones_cliente(userId));
+      const data = await response.json().catch(() => []);
 
       if (!response.ok) {
         setNotifications([]);
@@ -48,7 +48,7 @@ export default function BabysitterNotifications() {
 
       setNotifications(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.log("Error cargando notificaciones:", error);
+      console.log("Error cargando notificaciones del cliente:", error);
       setNotifications([]);
     } finally {
       setLoading(false);
@@ -71,7 +71,7 @@ export default function BabysitterNotifications() {
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace("/register/babysister/BabysitterDashboard")}
+              onPress={() => router.replace("/register/client/UserProfile")}
             >
               <Ionicons name="arrow-back" size={22} color="white" />
             </TouchableOpacity>
@@ -87,10 +87,6 @@ export default function BabysitterNotifications() {
               )}
             </View>
           </View>
-
-          {unreadCount > 0 && (
-            <Text style={styles.unreadText}>{unreadCount} sin leer</Text>
-          )}
         </View>
 
         <View style={styles.notificationsContainer}>
@@ -102,7 +98,7 @@ export default function BabysitterNotifications() {
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No hay notificaciones</Text>
               <Text style={styles.emptyText}>
-                Aqui apareceran solicitudes, resenas y movimientos de tus reservas.
+                Aqui veras mensajes, cambios de reserva y actualizaciones.
               </Text>
             </View>
           ) : (
@@ -127,11 +123,14 @@ export default function BabysitterNotifications() {
                       color="white"
                     />
                   )}
+                  {notification.icon === "chatbubble" && (
+                    <Ionicons name="chatbubble" size={20} color="white" />
+                  )}
                   {notification.icon === "star" && (
                     <FontAwesome name="star" size={20} color="white" />
                   )}
-                  {notification.icon === "chatbubble" && (
-                    <Ionicons name="chatbubble" size={20} color="white" />
+                  {notification.icon === "alert" && (
+                    <Ionicons name="warning" size={22} color="white" />
                   )}
                 </View>
 
@@ -162,17 +161,9 @@ export default function BabysitterNotifications() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#886BC1",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#FAFAFA",
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
+  safeArea: { flex: 1, backgroundColor: "#886BC1" },
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
+  scrollContent: { paddingBottom: 24 },
   header: {
     paddingTop: 14,
     paddingHorizontal: 20,
@@ -194,9 +185,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
   },
-  bellContainer: {
-    position: "relative",
-  },
+  bellContainer: { position: "relative" },
   badge: {
     position: "absolute",
     top: -5,
@@ -212,15 +201,7 @@ const styles = StyleSheet.create({
     color: "#FF768A",
     fontSize: 10,
   },
-  unreadText: {
-    color: "white",
-    marginTop: 10,
-    marginLeft: 50,
-    opacity: 0.8,
-  },
-  notificationsContainer: {
-    padding: 20,
-  },
+  notificationsContainer: { padding: 20 },
   centerState: {
     paddingVertical: 40,
     alignItems: "center",
@@ -263,9 +244,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  notificationContent: {
-    flex: 1,
-  },
+  notificationContent: { flex: 1 },
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -286,15 +265,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF768A",
     borderRadius: 4,
   },
-  message: {
-    color: "#666",
-    marginTop: 4,
-  },
+  message: { color: "#666", marginTop: 4 },
   time: {
     fontSize: 12,
     color: "#999",
     marginTop: 6,
   },
 });
-
 

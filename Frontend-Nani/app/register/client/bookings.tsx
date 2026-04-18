@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,13 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   Modal,
   TextInput,
   Alert,
+  AppState,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 import {
@@ -28,7 +29,6 @@ import {
   QrCode,
   Timer,
 } from "lucide-react-native";
-
 type BookingStatus =
   | "confirmed"
   | "pending"
@@ -53,7 +53,7 @@ export default function BookingsListScreen() {
   const [sendingCancel, setSendingCancel] = useState(false); // Esta te faltaba
   const [cancelWarning, setCancelWarning] = useState<string | null>(null); //
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       if (!refreshing) setLoading(true);
       const userId = await AsyncStorage.getItem("userId");
@@ -94,7 +94,7 @@ export default function BookingsListScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshing]);
 
   const handlePostReview = async () => {
     const comentarioLimpio = comment.trim();
@@ -184,9 +184,21 @@ export default function BookingsListScreen() {
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookings();
+    }, [fetchBookings]),
+  );
+
   useEffect(() => {
-    fetchBookings();
-  }, []);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        fetchBookings();
+      }
+    });
+
+    return () => sub.remove();
+  }, [fetchBookings]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -272,7 +284,7 @@ export default function BookingsListScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -285,13 +297,15 @@ export default function BookingsListScreen() {
         }
       >
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <ArrowLeft size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mis reservas</Text>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <ArrowLeft size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Mis reservas</Text>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -378,7 +392,7 @@ export default function BookingsListScreen() {
                       style={styles.qrExitButton}
                       onPress={() =>
                         router.push({
-                          pathname: "/register/client/ClientJobTracking",
+                          pathname: "/register/client/ClientActiveSession",
                           params: { bookingId: booking.id },
                         })
                       }
@@ -631,16 +645,21 @@ export default function BookingsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#FAFAFA" },
-  container: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: "#886BC1" },
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
   scrollContent: { paddingBottom: 110 },
   header: {
     backgroundColor: "#886BC1",
     paddingHorizontal: 24,
-    paddingTop: 50,
+    paddingTop: 14,
     paddingBottom: 24,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   backButton: {
     width: 40,
@@ -649,7 +668,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.20)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
   },
   headerTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
   section: { paddingHorizontal: 24, marginTop: 24 },

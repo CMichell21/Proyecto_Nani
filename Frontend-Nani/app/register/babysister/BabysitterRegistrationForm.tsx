@@ -4,6 +4,10 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import MapView, { Marker } from "react-native-maps";
+import * as Location from "expo-location";
+import { useEffect } from "react";
+import TermsModal from "../../../components/TermsModal";
 import {
   ActivityIndicator,
   Alert,
@@ -43,6 +47,8 @@ export default function BabysitterRegistrationForm() {
 
   const [errors, setErrors] = useState<any>({});
   const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -69,6 +75,38 @@ export default function BabysitterRegistrationForm() {
     idPhotoBack: null as any,
     facePhoto: null as any,
   });
+
+  const [region, setRegion] = useState({
+    latitude: 14.0723,
+    longitude: -87.1921,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  });
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert("Permiso requerido", "Se necesita acceso a la ubicación");
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+
+      setRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+
+      setFormData({
+        ...formData,
+        location: `${location.coords.latitude}, ${location.coords.longitude}`,
+      });
+    })();
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
@@ -323,6 +361,14 @@ export default function BabysitterRegistrationForm() {
         Alert.alert(
           "Falta información",
           "Por favor ingresa tu tarifa por hora.",
+        );
+        return;
+      }
+
+      if (!termsAccepted) {
+        Alert.alert(
+          "Términos requeridos",
+          "Debes leer y aceptar los Términos y Condiciones para continuar.",
         );
         return;
       }
@@ -657,28 +703,29 @@ export default function BabysitterRegistrationForm() {
                 <Text style={styles.errorText}>{errors.phone}</Text>
               )}
 
-              <Text style={styles.label}>Ubicación</Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  errors.location && styles.inputError,
-                ]}
+              <Text style={styles.label}>Selecciona tu ubicación</Text>
+
+              <MapView
+                style={{ width: "100%", height: 200, borderRadius: 15, marginTop: 10 }}
+                region={region}
+                onPress={(e) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+
+                  setRegion({
+                    ...region,
+                    latitude,
+                    longitude,
+                  });
+
+                  handleInputChange("location", `${latitude}, ${longitude}`);
+                }}
               >
-                <Ionicons
-                  name="location-outline"
-                  size={18}
-                  color={errors.location ? "#EF4444" : "#9CA3AF"}
-                />
-                <TextInput
-                  placeholder="Ciudad, País"
-                  style={styles.input}
-                  onChangeText={(v) => handleInputChange("location", v)}
-                  onBlur={() => validateField("location", formData.location)}
-                />
-              </View>
-              {errors.location && (
-                <Text style={styles.errorText}>{errors.location}</Text>
-              )}
+                <Marker coordinate={region} />
+              </MapView>
+
+              <Text style={{ fontSize: 12, marginTop: 5, color: "#6B7280" }}>
+                Toca el mapa para seleccionar tu ubicación
+              </Text>
 
               <Text style={styles.label}>Contraseña</Text>
               <View
@@ -953,13 +1000,56 @@ export default function BabysitterRegistrationForm() {
                 notificación cuando sea aprobado.
               </Text>
             </View>
+
+            {/* ── Términos y Condiciones ───────────────────────────────── */}
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setTermsAccepted(!termsAccepted)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    termsAccepted && styles.checkboxChecked,
+                  ]}
+                >
+                  {termsAccepted && (
+                    <Ionicons name="checkmark" size={14} color="white" />
+                  )}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  He leído y acepto los{" "}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => setShowTermsModal(true)}
+                  >
+                    Términos y Condiciones
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.downloadTermsBtn}
+                onPress={() => setShowTermsModal(true)}
+              >
+                <Ionicons name="document-text-outline" size={16} color="#FF768A" />
+                <Text style={styles.downloadTermsText}>
+                  Ver y Descargar PDF de Términos
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color="#FF768A" />
+              </TouchableOpacity>
+            </View>
           </>
         )}
 
         <TouchableOpacity
-          style={[styles.mainBtn, loading && { opacity: 0.7 }]}
+          style={[
+            styles.mainBtn,
+            (loading || (step === 3 && !termsAccepted)) && { opacity: 0.5 },
+          ]}
           onPress={handleNext}
-          disabled={loading}
+          disabled={loading || (step === 3 && !termsAccepted)}
         >
           {loading && step === 3 ? (
             <ActivityIndicator color="white" />
@@ -970,6 +1060,16 @@ export default function BabysitterRegistrationForm() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <TermsModal
+        visible={showTermsModal}
+        type="ninera"
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setTermsAccepted(true);
+          setShowTermsModal(false);
+        }}
+      />
     </View>
   );
 }
@@ -1141,4 +1241,61 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "600",
   },
+
+  // Términos y condiciones
+  termsContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: "#FFE4EA",
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#FF768A",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: "#FF768A",
+    borderColor: "#FF768A",
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#374151",
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: "#FF768A",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  downloadTermsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFF5F7",
+    borderRadius: 10,
+    padding: 12,
+  },
+  downloadTermsText: {
+    flex: 1,
+    color: "#FF768A",
+    fontWeight: "600",
+    fontSize: 13,
+  },
 });
+
+

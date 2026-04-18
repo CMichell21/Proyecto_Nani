@@ -14,6 +14,8 @@ import {
 import { ReservasService } from './reservas.service';
 import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
+import { CheckinDto } from './dto/chekin.dto';
+import { CheckoutDto } from './dto/checkout.dto';
 import { SupabaseGuard } from '../auth/supabase.guard';
 
 @Controller('reservas')
@@ -48,33 +50,43 @@ export class ReservasController {
   }
 
   @Post(':id/checkin')
+  @UseGuards(SupabaseGuard)
   async checkin(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body()
-    body: {
-      qrCode?: string;
-      checkInTime?: string | number;
-    },
+    @Param('id')
+    id: string,
+    @Body() body: CheckinDto,
+    @Req() req: any,
   ) {
-    return this.reservasService.procesarCheckin(id, body);
+    return this.reservasService.procesarCheckin(id, body, req.user.id);
   }
 
-  @UseGuards(SupabaseGuard)
   @Post(':id/checkout')
+  @UseGuards(SupabaseGuard)
   async checkout(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body()
-    body: {
-      rating?: number;
-      comments?: string;
-      checkInTime?: string | number;
-      checkOutTime?: string | number;
-      totalHours?: number;
-      totalPayment?: number;
-      qrCode?: string;
-    },
+    @Param('id') id: string,
+    @Body() body: CheckoutDto,
+    @Req() req: any,
   ) {
-    return this.reservasService.procesarCheckout(id, body);
+    return this.reservasService.procesarCheckout(id, body, req.user.id);
+  }
+
+  @Post(':id/confirmar-finalizacion')
+  @UseGuards(SupabaseGuard)
+  async confirmarFinalizacion(@Param('id') id: string, @Req() req: any) {
+    return this.reservasService.confirmarFinalizacionCliente(
+      id,
+      req.user.sub ?? req.user.id,
+    );
+  }
+  @Post(':id/confirmar-cobro-efectivo')
+  @UseGuards(SupabaseGuard)
+  async confirmarCobro(@Param('id') id: string, @Req() req) {
+    const authUserId = req.user.sub ?? req.user.id;
+
+    return await this.reservasService.confirmarCobroEfectivoNinera(
+      id,
+      authUserId,
+    );
   }
 
   @Get('ninera/:usuarioId')
@@ -138,6 +150,22 @@ export class ReservasController {
       motivo_rechazo: body.motivo_rechazo || null,
     } as any);
   }
+  @UseGuards(SupabaseGuard)
+  @Post(':id/emergencia')
+  async reportarEmergencia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { motivo: string },
+    @Req() req: any,
+  ) {
+    const authUserId = req.user?.id || req.user?.sub;
+    if (!authUserId) throw new BadRequestException('Usuario no identificado');
+    return this.reservasService.reportarEmergencia(
+      id,
+      body.motivo || '',
+      authUserId,
+    );
+  }
+
   @UseGuards(SupabaseGuard)
   @Patch(':id/cancelar')
   async cancelar(

@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
@@ -23,7 +23,6 @@ type ChatPreview = {
   photo: string | null;
   lastMessage: string;
   time: string;
-  unreadCount: number;
   isOnline: boolean;
   status: string;
 };
@@ -53,7 +52,7 @@ export default function BabysitterChats() {
 
       setChats(data || []);
     } catch (error) {
-      console.log("Error cargando chats de ninera:", error);
+      console.log("Error cargando chats:", error);
       setChats([]);
     } finally {
       setLoading(false);
@@ -85,7 +84,7 @@ export default function BabysitterChats() {
         colors={["#886BC1", "#FF768A"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: insets.top + 12 }]}
       >
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -106,7 +105,7 @@ export default function BabysitterChats() {
             style={styles.searchIcon}
           />
           <TextInput
-            placeholder="Buscar conversacion..."
+            placeholder="Buscar conversación..."
             placeholderTextColor="#A0A0A0"
             style={styles.searchInput}
             value={searchText}
@@ -116,73 +115,65 @@ export default function BabysitterChats() {
       </LinearGradient>
 
       <View style={styles.content}>
-        {loading ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color="#886BC1" />
-          </View>
-        ) : filteredChats.length === 0 ? (
-          <View style={styles.centerState}>
-            <Text style={styles.emptyTitle}>No tienes chats disponibles</Text>
-            <Text style={styles.emptyText}>
-              Aqui solo apareceran clientes con reserva confirmada o servicio en curso.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredChats}
-            keyExtractor={(item) => item.otherUserId}
-            contentContainerStyle={[
-              styles.listContent,
-              { paddingBottom: Math.max(insets.bottom + 16, 24) },
-            ]}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.chatCard}
-                onPress={() =>
-                  router.push({
-                    pathname: "/register/babysister/BabysitterChatThread",
-                    params: {
-                      otherUserId: item.otherUserId,
-                      clientName: item.name,
-                      clientPhoto: item.photo || "",
-                    },
-                  })
-                }
-              >
-                <View style={styles.avatarContainer}>
-                  <Image
-                    source={{
-                      uri: item.photo || "https://via.placeholder.com/150",
-                    }}
-                    style={styles.avatar}
-                  />
-                  {item.isOnline && <View style={styles.onlineDot} />}
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#886BC1" />
+        </View>
+      ) : filteredChats.length === 0 ? (
+        <View style={styles.centerState}>
+          <Text style={styles.emptyTitle}>No tienes chats disponibles</Text>
+          <Text style={styles.emptyText}>
+            Aquí solo aparecerán clientes con reserva confirmada o en curso.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredChats}
+          keyExtractor={(item) => item.otherUserId}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.chatCard}
+              onPress={() =>
+                router.push({
+                  pathname: "/register/babysitter/BabysitterChatThread",
+                  params: {
+                    otherUserId: item.otherUserId,
+                    clientName: item.name,
+                    clientPhoto: item.photo || "",
+                  },
+                })
+              }
+            >
+              <View style={styles.avatarContainer}>
+                <Image
+                  source={{
+                    uri: item.photo || "https://via.placeholder.com/150",
+                  }}
+                  style={styles.avatar}
+                />
+                {item.isOnline && <View style={styles.onlineDot} />}
+              </View>
+
+              <View style={styles.chatInfo}>
+                <View style={styles.chatHeader}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.time}>{item.time || item.status}</Text>
                 </View>
 
-                <View style={styles.chatInfo}>
-                  <View style={styles.chatHeader}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.time}>{item.time || item.status}</Text>
-                  </View>
-
-                  <View style={styles.chatFooter}>
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                      {item.lastMessage}
-                    </Text>
-                    {item.unreadCount > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>{item.unreadCount}</Text>
-                      </View>
-                    )}
-                  </View>
+                <View style={styles.chatFooter}>
+                  <Text style={styles.lastMessage} numberOfLines={1}>
+                    {item.lastMessage}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            )}
-          />
-        )}
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
       </View>
     </SafeAreaView>
   );
@@ -191,7 +182,6 @@ export default function BabysitterChats() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#886BC1" },
   header: {
-    paddingTop: 14,
     paddingHorizontal: 20,
     paddingBottom: 25,
     borderBottomLeftRadius: 30,
@@ -230,7 +220,7 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, color: "#2E2E2E" },
-  listContent: { paddingVertical: 10 },
+  listContent: { paddingVertical: 10, paddingBottom: 20 },
   chatCard: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -270,16 +260,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   lastMessage: { fontSize: 14, color: "#707070", flex: 1, marginRight: 10 },
-  unreadBadge: {
-    backgroundColor: "#FF768A",
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 6,
-  },
-  unreadText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
   separator: {
     height: 1,
     backgroundColor: "#F0F0F0",

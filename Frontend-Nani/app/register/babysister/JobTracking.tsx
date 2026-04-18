@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Image,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 import {
@@ -21,6 +24,9 @@ import {
   Navigation,
   QrCode,
   Users,
+  Banknote,
+  CheckCircle2,
+  Siren,
 } from "lucide-react-native";
 
 export default function JobTracking() {
@@ -50,6 +56,17 @@ export default function JobTracking() {
 
   const [serverBooking, setServerBooking] = useState<any>(null);
   const [loadingServer, setLoadingServer] = useState(false);
+
+  // ── Estado para confirmar cobro en efectivo ──
+  const [showCashConfirmModal, setShowCashConfirmModal] = useState(false);
+  const [confirmingCash, setConfirmingCash] = useState(false);
+  const [cashConfirmed, setCashConfirmed] = useState(false);
+
+  // ── Estado para emergencia ──
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [emergencyReason, setEmergencyReason] = useState("");
+  const [sendingEmergency, setSendingEmergency] = useState(false);
+  const [emergencySent, setEmergencySent] = useState(false);
 
   const bookingStatus =
     serverBooking?.status ?? String(initialBookingStatus || "");
@@ -113,6 +130,12 @@ export default function JobTracking() {
     return () => clearInterval(interval);
   }, [fetchBookingFromServer]);
 
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookingFromServer();
+    }, [fetchBookingFromServer]),
+  );
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") fetchBookingFromServer();
@@ -130,6 +153,65 @@ export default function JobTracking() {
     } else if (address) {
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
       Linking.openURL(url);
+    }
+  };
+
+  // ── Lógica para saber si mostrar el botón de cobro en efectivo ──
+  const isServiceFinished =
+    normalizedStatus === "completada" ||
+    normalizedStatus === "finalizada" ||
+    normalizedStatus === "finalizado" ||
+    normalizedStatus === "pendiente_confirmacion";
+
+  const esEfectivo =
+    paymentMethod.toLowerCase().includes("efectivo") ||
+    serverBooking?.paymentMethod?.toLowerCase().includes("efectivo");
+
+  const cobrarEfectivoYaConfirmado =
+    serverBooking?.ninera_confirmo_cobro_efectivo === true || cashConfirmed;
+
+  const mostrarBotonEfectivo =
+    isServiceFinished && esEfectivo && !cobrarEfectivoYaConfirmado;
+
+  // ── Confirmar cobro en efectivo ──
+  const handleConfirmarCobro = async () => {
+    try {
+      setConfirmingCash(true);
+      const token = await AsyncStorage.getItem("userToken");
+
+      const response = await fetch(
+        ENDPOINTS.confirmar_cobro_efectivo(bookingId),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ metodo: "efectivo" }),
+        },
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setShowCashConfirmModal(false);
+        setCashConfirmed(true);
+        Alert.alert(
+          "¡Cobro confirmado!",
+          `Se ha registrado el pago en efectivo. Total calculado: L. ${result.total_calculado}`,
+          [{ text: "OK" }],
+        );
+        fetchBookingFromServer();
+      } else {
+        Alert.alert(
+          "Error",
+          result.message || "No se pudo confirmar el cobro.",
+        );
+      }
+    } catch (error) {
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setConfirmingCash(false);
     }
   };
 
@@ -158,15 +240,56 @@ export default function JobTracking() {
   const canScan =
     normalizedStatus === "confirmada" || normalizedStatus === "en_progreso";
 
+  const handleGoBack = () => {
+    router.replace("/register/babysister/BabysitterDashboard");
+  };
+
+  // ── Enviar emergencia ──
+  const handleSendEmergency = async () => {
+    if (emergencyReason.trim().length < 5) {
+      Alert.alert("Atención", "Por favor describe la emergencia (mínimo 5 caracteres).");
+      return;
+    }
+    try {
+      setSendingEmergency(true);
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await fetch(
+        ENDPOINTS.reportar_emergencia(String(bookingId || "")),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ motivo: emergencyReason.trim() }),
+        },
+      );
+      const result = await response.json();
+      if (response.ok) {
+        setShowEmergencyModal(false);
+        setEmergencySent(true);
+        setEmergencyReason("");
+        Alert.alert(
+          "Alerta enviada",
+          "El padre de familia fue notificado de la emergencia.",
+          [{ text: "OK" }],
+        );
+      } else {
+        Alert.alert("Error", result.message || "No se pudo enviar la alerta.");
+      }
+    } catch {
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setSendingEmergency(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
               <ArrowLeft color="white" size={22} />
             </TouchableOpacity>
 
@@ -286,9 +409,75 @@ export default function JobTracking() {
 
           <View style={styles.paymentRow}>
             <Text>Total estimado</Text>
-            <Text style={styles.total}>${Number(payment).toFixed(2)}</Text>
+            <Text style={styles.total}>L. {Number(payment).toFixed(2)}</Text>
           </View>
         </View>
+
+        {/* ── BOTÓN CONFIRMAR COBRO EN EFECTIVO ─────────────────────── */}
+        {mostrarBotonEfectivo && (
+          <View style={styles.cashCard}>
+            <View style={styles.cashCardTop}>
+              <View style={styles.cashIconBadge}>
+                <Banknote size={22} color="#2E7D32" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cashCardTitle}>Cobro en efectivo</Text>
+                <Text style={styles.cashCardSub}>
+                  El servicio finalizó. ¿Recibiste el pago?
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.cashAmountRow}>
+              <Text style={styles.cashAmountLabel}>Monto a cobrar</Text>
+              <Text style={styles.cashAmountValue}>
+                L. {Number(payment).toFixed(2)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.cashConfirmBtn}
+              onPress={() => setShowCashConfirmModal(true)}
+            >
+              <Banknote size={18} color="white" />
+              <Text style={styles.cashConfirmBtnText}>
+                Confirmar que recibí el pago
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── BADGE COBRO CONFIRMADO ──────────────────────────────────── */}
+        {cobrarEfectivoYaConfirmado && esEfectivo && (
+          <View style={styles.cashConfirmedBadge}>
+            <CheckCircle2 size={18} color="#2E7D32" />
+            <Text style={styles.cashConfirmedText}>
+              Pago en efectivo recibido y confirmado ✓
+            </Text>
+          </View>
+        )}
+
+        {/* ── BOTÓN DE EMERGENCIA ──────────────────────────────────── */}
+        {normalizedStatus === "en_progreso" && (
+          <View style={styles.emergencySection}>
+            {emergencySent ? (
+              <View style={styles.emergencySentBadge}>
+                <Siren size={18} color="#991B1B" />
+                <Text style={styles.emergencySentText}>
+                  Alerta de emergencia enviada al padre ✓
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.emergencyButton}
+                onPress={() => setShowEmergencyModal(true)}
+              >
+                <Siren size={20} color="white" />
+                <Text style={styles.emergencyButtonText}>Emergencia</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {canScan && (
           <TouchableOpacity
@@ -327,6 +516,124 @@ export default function JobTracking() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* ── MODAL EMERGENCIA ────────────────────────────────────────────── */}
+      <Modal
+        visible={showEmergencyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEmergencyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.emergencyModalIconContainer}>
+              <Siren size={44} color="#DC2626" />
+            </View>
+
+            <Text style={styles.emergencyModalTitle}>Reportar Emergencia</Text>
+            <Text style={styles.emergencyModalText}>
+              Esta alerta se enviará inmediatamente al padre de familia.
+              Describe brevemente qué está ocurriendo.
+            </Text>
+
+            <TextInput
+              style={styles.emergencyInput}
+              placeholder="Ej: El niño se cayó y necesita atención médica..."
+              placeholderTextColor="#BFBFBF"
+              multiline
+              value={emergencyReason}
+              onChangeText={setEmergencyReason}
+              maxLength={300}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setShowEmergencyModal(false);
+                  setEmergencyReason("");
+                }}
+                disabled={sendingEmergency}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.emergencyConfirmBtn,
+                  sendingEmergency && { opacity: 0.6 },
+                ]}
+                onPress={handleSendEmergency}
+                disabled={sendingEmergency}
+              >
+                {sendingEmergency ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.emergencyConfirmBtnText}>
+                    Enviar alerta
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL CONFIRMAR COBRO EFECTIVO ─────────────────────────────── */}
+      <Modal
+        visible={showCashConfirmModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCashConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <Banknote size={44} color="#2E7D32" />
+            </View>
+
+            <Text style={styles.modalTitle}>¿Recibiste el pago?</Text>
+            <Text style={styles.modalText}>
+              Al confirmar, registrarás que recibiste el pago en efectivo del
+              cliente. Esta acción no se puede deshacer.
+            </Text>
+
+            <View style={styles.modalAmountBox}>
+              <Text style={styles.modalAmountLabel}>Monto recibido</Text>
+              <Text style={styles.modalAmountValue}>
+                L. {Number(payment).toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowCashConfirmModal(false)}
+                disabled={confirmingCash}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.cashModalConfirmBtn,
+                  confirmingCash && { opacity: 0.6 },
+                ]}
+                onPress={handleConfirmarCobro}
+                disabled={confirmingCash}
+              >
+                {confirmingCash ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.cashModalConfirmText}>
+                    Sí, recibí el pago
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -373,6 +680,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "white",
     margin: 20,
+    marginBottom: 0,
     padding: 20,
     borderRadius: 20,
   },
@@ -408,6 +716,7 @@ const styles = StyleSheet.create({
 
   notes: {
     marginHorizontal: 20,
+    marginTop: 20,
     padding: 20,
     borderRadius: 20,
     backgroundColor: "#FFF5F7",
@@ -425,6 +734,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: "#FF768A",
     margin: 20,
+    marginTop: 20,
     padding: 15,
     borderRadius: 20,
     flexDirection: "row",
@@ -433,4 +743,215 @@ const styles = StyleSheet.create({
   },
 
   confirmText: { color: "white", fontSize: 16, fontWeight: "600" },
+
+  // ── Cobro en efectivo ──────────────────────────────────────────────────
+  cashCard: {
+    backgroundColor: "#F1FBF3",
+    margin: 20,
+    marginBottom: 0,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#A5D6A7",
+    gap: 14,
+  },
+  cashCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  cashIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cashCardTitle: { fontSize: 16, fontWeight: "700", color: "#2E7D32" },
+  cashCardSub: { fontSize: 13, color: "#555", marginTop: 2 },
+  cashAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#E8F5E9",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  cashAmountLabel: { fontSize: 13, color: "#555", fontWeight: "600" },
+  cashAmountValue: { fontSize: 22, fontWeight: "800", color: "#2E7D32" },
+  cashConfirmBtn: {
+    backgroundColor: "#2E7D32",
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  cashConfirmBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
+
+  cashConfirmedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    margin: 20,
+    marginBottom: 0,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 14,
+    padding: 14,
+  },
+  cashConfirmedText: { color: "#2E7D32", fontWeight: "600", fontSize: 14 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 28,
+    paddingBottom: 40,
+    alignItems: "center",
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#333",
+    marginBottom: 10,
+  },
+  modalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  modalAmountBox: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 12,
+    padding: 14,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalAmountLabel: { fontSize: 13, color: "#777", marginBottom: 4 },
+  modalAmountValue: { fontSize: 26, fontWeight: "900", color: "#2E7D32" },
+  modalButtons: { flexDirection: "row", gap: 12, width: "100%" },
+  cancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EEE",
+    alignItems: "center",
+  },
+  cancelBtnText: { color: "#555", fontWeight: "600" },
+  cashModalConfirmBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#2E7D32",
+    alignItems: "center",
+  },
+  cashModalConfirmText: { color: "white", fontWeight: "700" },
+
+  // ── Emergencia ─────────────────────────────────────────────────────────
+  emergencySection: {
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  emergencyButton: {
+    backgroundColor: "#DC2626",
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#DC2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  emergencyButtonText: {
+    color: "white",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  emergencySentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+  },
+  emergencySentText: {
+    color: "#991B1B",
+    fontWeight: "600",
+    fontSize: 14,
+    flex: 1,
+  },
+
+  // Modal emergencia
+  emergencyModalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  emergencyModalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#DC2626",
+    marginBottom: 8,
+  },
+  emergencyModalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  emergencyInput: {
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: "#333",
+    backgroundColor: "#FFF5F5",
+    minHeight: 90,
+    textAlignVertical: "top",
+    marginBottom: 20,
+  },
+  emergencyConfirmBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+  },
+  emergencyConfirmBtnText: { color: "white", fontWeight: "700" },
 });

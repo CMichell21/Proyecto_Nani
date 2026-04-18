@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,18 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 import {
   ArrowLeft,
@@ -28,7 +34,232 @@ import {
   Baby,
   Info,
   Receipt,
+  ThumbsUp,
+  CreditCard,
+  Lock,
 } from "lucide-react-native";
+
+function formatCardNumber(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 16)
+    .replace(/(.{4})/g, "$1 ")
+    .trim();
+}
+
+function formatExpiry(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length >= 3) return digits.slice(0, 2) + "/" + digits.slice(2);
+  return digits;
+}
+
+function CardPaymentGateway({
+  visible,
+  total,
+  onSubmit,
+  onClose,
+  submitting,
+}: {
+  visible: boolean;
+  total: number;
+  onSubmit: (data: {
+    numero: string;
+    vencimiento: string;
+    cvv: string;
+  }) => void;
+  onClose: () => void;
+  submitting: boolean;
+}) {
+  const [numero, setNumero] = useState("");
+  const [vencimiento, setVencimiento] = useState("");
+  const [cvv, setCvv] = useState("");
+  const [errores, setErrores] = useState<{ [k: string]: string }>({});
+
+  const validate = () => {
+    const e: { [k: string]: string } = {};
+    if (numero.replace(/\s/g, "").length < 16)
+      e.numero = "Número de tarjeta inválido.";
+    if (vencimiento.length < 5)
+      e.vencimiento = "Fecha de vencimiento inválida.";
+    if (cvv.length < 3) e.cvv = "CVV inválido.";
+    setErrores(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handlePay = () => {
+    if (!validate()) return;
+    onSubmit({
+      numero: numero.replace(/\s/g, ""),
+      vencimiento,
+      cvv,
+    });
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.gatewayContainer}>
+          <LinearGradient
+            colors={["#886BC1", "#FF768A"]}
+            style={styles.gatewayHeader}
+          >
+            <View style={styles.gatewayHeaderContent}>
+              <CreditCard size={28} color="#FFF" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gatewayHeaderTitle}>Pago con Tarjeta</Text>
+                <Text style={styles.gatewayHeaderSub}>Servicio finalizado</Text>
+              </View>
+              <View style={styles.lockBadge}>
+                <Lock size={12} color="#886BC1" />
+                <Text style={styles.lockText}>Seguro</Text>
+              </View>
+            </View>
+            <View style={styles.totalBadge}>
+              <Text style={styles.totalBadgeLabel}>Total a pagar</Text>
+              <Text style={styles.totalBadgeAmount}>L. {total.toFixed(2)}</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Formulario */}
+          <ScrollView
+            style={styles.gatewayForm}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Número de tarjeta</Text>
+              <View
+                style={[
+                  styles.fieldInputRow,
+                  errores.numero && styles.fieldError,
+                ]}
+              >
+                <CreditCard size={18} color="#886BC1" />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="0000 0000 0000 0000"
+                  placeholderTextColor="#BBB"
+                  keyboardType="numeric"
+                  value={numero}
+                  onChangeText={(v) => {
+                    setNumero(formatCardNumber(v));
+                    if (errores.numero)
+                      setErrores((e) => ({ ...e, numero: "" }));
+                  }}
+                  maxLength={19}
+                />
+              </View>
+              {!!errores.numero && (
+                <Text style={styles.errorText}>{errores.numero}</Text>
+              )}
+            </View>
+
+            <View style={styles.fieldRow}>
+              <View style={[styles.fieldContainer, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>Fecha de vencimiento</Text>
+                <View
+                  style={[
+                    styles.fieldInputRow,
+                    errores.vencimiento && styles.fieldError,
+                  ]}
+                >
+                  <Text style={{ fontSize: 16, color: "#886BC1" }}>📅</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="MM/AA"
+                    placeholderTextColor="#BBB"
+                    keyboardType="numeric"
+                    value={vencimiento}
+                    onChangeText={(v) => {
+                      setVencimiento(formatExpiry(v));
+                      if (errores.vencimiento)
+                        setErrores((e) => ({ ...e, vencimiento: "" }));
+                    }}
+                    maxLength={5}
+                  />
+                </View>
+                {!!errores.vencimiento && (
+                  <Text style={styles.errorText}>{errores.vencimiento}</Text>
+                )}
+              </View>
+
+              <View style={[styles.fieldContainer, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>CVV / Clave</Text>
+                <View
+                  style={[
+                    styles.fieldInputRow,
+                    errores.cvv && styles.fieldError,
+                  ]}
+                >
+                  <Lock size={18} color="#886BC1" />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="•••"
+                    placeholderTextColor="#BBB"
+                    keyboardType="numeric"
+                    secureTextEntry
+                    value={cvv}
+                    onChangeText={(v) => {
+                      setCvv(v.replace(/\D/g, "").slice(0, 4));
+                      if (errores.cvv) setErrores((e) => ({ ...e, cvv: "" }));
+                    }}
+                    maxLength={4}
+                  />
+                </View>
+                {!!errores.cvv && (
+                  <Text style={styles.errorText}>{errores.cvv}</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.securityNote}>
+              <Lock size={13} color="#666" />
+              <Text style={styles.securityNoteText}>
+                Tus datos están cifrados y protegidos. No almacenamos
+                información de tu tarjeta.
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Botones */}
+          <View style={styles.gatewayButtons}>
+            <TouchableOpacity
+              style={styles.cancelGatewayBtn}
+              onPress={onClose}
+              disabled={submitting}
+            >
+              <Text style={styles.cancelGatewayText}>Cancelar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.payBtn, submitting && { opacity: 0.6 }]}
+              onPress={handlePay}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <>
+                  <Lock size={16} color="#FFF" />
+                  <Text style={styles.payBtnText}>
+                    Pagar L. {total.toFixed(2)}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
 
 export default function ClientJobTracking() {
   const router = useRouter();
@@ -38,11 +269,17 @@ export default function ClientJobTracking() {
   const [booking, setBooking] = useState<any>(null);
   const [showQR, setShowQR] = useState(false);
 
-  // Estados para el cronómetro
   const [timeLeft, setTimeLeft] = useState<string>("00:00:00");
   const [isExtraTime, setIsExtraTime] = useState(false);
 
-  const fetchBookingDetail = async () => {
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
+
+  const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentDone, setPaymentDone] = useState(false);
+
+  const fetchBookingDetail = useCallback(async () => {
     const bId = params.bookingId as string;
     if (!bId || bId === "undefined" || bId === "[bookingId]") return;
 
@@ -57,13 +294,29 @@ export default function ClientJobTracking() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.bookingId]);
 
   useEffect(() => {
     fetchBookingDetail();
     const interval = setInterval(fetchBookingDetail, 30000);
     return () => clearInterval(interval);
-  }, [params.bookingId]);
+  }, [fetchBookingDetail]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookingDetail();
+    }, [fetchBookingDetail]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        fetchBookingDetail();
+      }
+    });
+
+    return () => sub.remove();
+  }, [fetchBookingDetail]);
 
   useEffect(() => {
     if (booking?.status !== "en_progreso") return;
@@ -95,7 +348,38 @@ export default function ClientJobTracking() {
     return () => clearInterval(timer);
   }, [booking?.status, booking?.hora_fin]);
 
-  // QR con validación de tiempo para Nanny
+  useEffect(() => {
+    const paymentStatus = String(booking?.paymentStatus ?? "").toLowerCase();
+    if (paymentStatus === "completada" || paymentStatus === "completado") {
+      setPaymentDone(true);
+      setShowPaymentGateway(false);
+    }
+  }, [booking?.paymentStatus]);
+
+  useEffect(() => {
+    if (!booking || paymentDone) return;
+
+    const isFinished =
+      booking.status === "completada" ||
+      booking.status === "pendiente_confirmacion" ||
+      booking.status === "finalizada" ||
+      booking.status === "finalizado";
+
+    const esTarjeta = booking.paymentMethod?.toLowerCase().includes("tarjeta");
+    const paymentStatus = String(booking.paymentStatus ?? "").toLowerCase();
+    const pagoYaRealizado =
+      paymentStatus === "completada" || paymentStatus === "completado";
+
+    if (
+      isFinished &&
+      esTarjeta &&
+      !pagoYaRealizado &&
+      !booking.cliente_confirmo_finalizacion
+    ) {
+      setShowPaymentGateway(true);
+    }
+  }, [booking, paymentDone]);
+
   const qrValue = useMemo(() => {
     if (!booking || !booking.id) return "invalid";
 
@@ -104,10 +388,8 @@ export default function ClientJobTracking() {
       `${booking.fecha_servicio}T${booking.hora_inicio}`,
     ).getTime();
 
-    // Habilitar 1 hora antes (3600000 ms)
     const UNA_HORA_EN_MS = 3600000;
 
-    // Si no ha empezado y falta más de una hora para la hora pactada
     if (
       ahora < inicioServicio - UNA_HORA_EN_MS &&
       booking.status !== "en_progreso"
@@ -126,19 +408,137 @@ export default function ClientJobTracking() {
     });
   }, [booking?.status, booking?.fecha_servicio, booking?.hora_inicio, showQR]);
 
-  if (loading && !booking) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#886BC1" />
-        <Text style={styles.loadingText}>Sincronizando con Nani...</Text>
-      </View>
-    );
-  }
+  const canConfirmFinish = useMemo(() => {
+    if (!booking) return false;
+    const elegibleStatus = ["completada", "pendiente_confirmacion"];
+    if (!elegibleStatus.includes(booking.status)) return false;
+    if (booking.cliente_confirmo_finalizacion) return false;
 
+    const esTarjeta = booking.paymentMethod?.toLowerCase().includes("tarjeta");
+    if (esTarjeta && !paymentDone) return false;
+
+    if (!booking.hora_salida_real) return true;
+    const salida = new Date(booking.hora_salida_real).getTime();
+    const veinticuatroHoras = 24 * 60 * 60 * 1000;
+    return Date.now() - salida < veinticuatroHoras;
+  }, [booking, paymentDone]);
+
+  const alreadyConfirmed = booking?.cliente_confirmo_finalizacion === true;
+
+  const handleConfirmFinish = async () => {
+    try {
+      setConfirmingFinish(true);
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await fetch(
+        ENDPOINTS.confirmar_finalizacion(booking.id),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const result = await response.json();
+      if (response.ok) {
+        setConfirmModalVisible(false);
+
+        Alert.alert(
+          "¡Confirmado!",
+          "Has confirmado la finalización del servicio.",
+          [
+            {
+              text: "Ver Resumen",
+              onPress: () => {
+                router.replace({
+                  pathname: "/register/client/home",
+                  params: { bookingId: booking.id },
+                });
+              },
+            },
+          ],
+        );
+      } else {
+        Alert.alert("Error", result.message || "No se pudo confirmar.");
+      }
+    } catch {
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setConfirmingFinish(false);
+    }
+  };
+
+  /// ── Procesar pago con tarjeta ──────────────────────────────────────────
+  const handleCardPayment = async (data: {
+    numero: string;
+    vencimiento: string;
+    cvv: string;
+  }) => {
+    try {
+      setPaymentSubmitting(true);
+      const token = await AsyncStorage.getItem("userToken");
+
+      // UN SOLO FETCH: Este activa toda la lógica del backend
+      const response = await fetch(
+        ENDPOINTS.confirmar_finalizacion(booking.id),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            reserva_id: booking.id,
+            tarjeta: {
+              numero: data.numero,
+              vencimiento: data.vencimiento,
+              cvv: data.cvv,
+            },
+            monto: Number(booking?.total || 0),
+          }),
+        },
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setShowPaymentGateway(false);
+        setPaymentDone(true);
+
+        Alert.alert(
+          "¡Éxito!",
+          `Pago procesado y reserva finalizada. Total: L. ${result.total_calculado}`,
+        );
+
+        fetchBookingDetail();
+      } else {
+        Alert.alert(
+          "Atención",
+          result.message || "No se pudo procesar el pago.",
+        );
+      }
+    } catch (error) {
+      console.error("Error en pago:", error);
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
   const isCompleted =
     booking?.status === "finalizada" || booking?.status === "finalizado";
   const canShowQR =
     booking?.status === "confirmada" || booking?.status === "en_progreso";
+  const esTarjeta = booking?.paymentMethod?.toLowerCase().includes("tarjeta");
+
+  const serviceFinished =
+    booking?.status === "completada" ||
+    booking?.status === "pendiente_confirmacion" ||
+    isCompleted;
+
+  const handleGoBack = () => {
+    router.replace("/register/client/home");
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -149,10 +549,7 @@ export default function ClientJobTracking() {
         {/* HEADER */}
         <LinearGradient colors={["#886BC1", "#FF768A"]} style={styles.header}>
           <View style={styles.headerTop}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
               <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <View>
@@ -165,7 +562,7 @@ export default function ClientJobTracking() {
 
           <View style={styles.statusCard}>
             <View style={styles.statusIconContainer}>
-              {isCompleted ? (
+              {isCompleted || alreadyConfirmed ? (
                 <CheckCircle2 size={24} color="#FFF" />
               ) : (
                 <Timer size={24} color="#FFF" />
@@ -181,6 +578,123 @@ export default function ClientJobTracking() {
         </LinearGradient>
 
         <View style={styles.content}>
+          {/* ── BANNER PAGO POR TARJETA PENDIENTE ─────────────────────────── */}
+          {serviceFinished &&
+            esTarjeta &&
+            !paymentDone &&
+            !alreadyConfirmed && (
+              <View style={styles.paymentPendingBanner}>
+                <View style={styles.paymentPendingTop}>
+                  <CreditCard size={22} color="#886BC1" />
+                  <Text style={styles.paymentPendingTitle}>
+                    Pago pendiente con tarjeta
+                  </Text>
+                </View>
+                <Text style={styles.paymentPendingText}>
+                  El servicio ha finalizado. Por favor completa el pago con tu
+                  tarjeta para confirmar el cierre de la reserva.
+                </Text>
+                <TouchableOpacity
+                  style={styles.openPaymentBtn}
+                  onPress={() => setShowPaymentGateway(true)}
+                >
+                  <CreditCard size={18} color="white" />
+                  <Text style={styles.openPaymentBtnText}>
+                    Pagar L. {Number(booking?.total || 0).toFixed(2)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+          {paymentDone && (
+            <View style={styles.paymentSuccessBadge}>
+              <CheckCircle2 size={18} color="#16A34A" />
+              <Text style={styles.paymentSuccessText}>
+                Pago con tarjeta procesado ✓
+              </Text>
+            </View>
+          )}
+
+          {canConfirmFinish && (
+            <View style={styles.confirmBanner}>
+              <View style={styles.confirmBannerTop}>
+                <ThumbsUp size={22} color="#886BC1" />
+                <Text style={styles.confirmBannerTitle}>
+                  ¿El servicio finalizó correctamente?
+                </Text>
+              </View>
+              <Text style={styles.confirmBannerText}>
+                La niñera marcó el fin del servicio. Por favor confirma la
+                finalización dentro de las próximas 24 horas. Esto permite
+                calcular el total real y cerrar la reserva.
+              </Text>
+              <TouchableOpacity
+                style={styles.confirmBannerButton}
+                onPress={() => setConfirmModalVisible(true)}
+              >
+                <CheckCircle2 size={18} color="white" />
+                <Text style={styles.confirmBannerButtonText}>
+                  Confirmar finalización
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {alreadyConfirmed && (
+            <View style={styles.confirmedBadge}>
+              <CheckCircle2 size={18} color="#16A34A" />
+              <Text style={styles.confirmedBadgeText}>
+                Finalización confirmada por ti ✓
+              </Text>
+            </View>
+          )}
+
+          {/* CÁLCULO FINAL */}
+          {(alreadyConfirmed || isCompleted) &&
+            booking?.tiempo_total_trabajado && (
+              <View style={styles.finalCalcCard}>
+                <Text style={styles.finalCalcTitle}>Resumen Final</Text>
+
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Hora de entrada real</Text>
+                  <Text style={styles.paymentValue}>
+                    {booking.hora_entrada_real
+                      ? new Date(booking.hora_entrada_real).toLocaleTimeString(
+                          [],
+                          { hour: "2-digit", minute: "2-digit" },
+                        )
+                      : "—"}
+                  </Text>
+                </View>
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Hora de salida real</Text>
+                  <Text style={styles.paymentValue}>
+                    {booking.hora_salida_real
+                      ? new Date(booking.hora_salida_real).toLocaleTimeString(
+                          [],
+                          { hour: "2-digit", minute: "2-digit" },
+                        )
+                      : "—"}
+                  </Text>
+                </View>
+                <View style={styles.paymentRow}>
+                  <Text style={styles.paymentLabel}>Horas trabajadas</Text>
+                  <Text style={styles.paymentValue}>
+                    {parseFloat(booking.tiempo_total_trabajado).toFixed(2)} h
+                  </Text>
+                </View>
+                <View style={[styles.paymentRow, styles.totalRow]}>
+                  <Text style={styles.totalLabel}>Total Final</Text>
+                  <Text style={styles.totalValue}>
+                    L.{" "}
+                    {Number(
+                      booking?.total_calculado || booking?.total || 0,
+                    ).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
           {/* UBICACIÓN */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
@@ -203,76 +717,91 @@ export default function ClientJobTracking() {
           {/* CRONÓMETRO */}
           {booking?.status === "en_progreso" && (
             <View style={[styles.card, styles.timerCard]}>
-              <Text style={styles.timerLabel}>
-                {isExtraTime ? "TIEMPO EXTRA" : "TIEMPO RESTANTE"}
-              </Text>
+              <Text style={styles.timerLabel}>TIEMPO RESTANTE</Text>
               <Text
                 style={[styles.timerValue, isExtraTime && { color: "#FF768A" }]}
               >
                 {timeLeft}
               </Text>
+              {isExtraTime && (
+                <Text
+                  style={{ color: "#FF768A", fontSize: 12, fontWeight: "600" }}
+                >
+                  Tiempo extra en curso
+                </Text>
+              )}
             </View>
           )}
 
           {/* NIÑERA */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Tu Nanny</Text>
-            <View style={styles.babysitterRow}>
-              <Image
-                source={{
-                  uri:
-                    booking?.babysitterPhoto ||
-                    "https://via.placeholder.com/100",
-                }}
-                style={styles.babysitterImage}
-              />
-              <View style={styles.babysitterInfo}>
-                <Text style={styles.babysitterName}>
-                  {booking?.babysitterName}
-                </Text>
-                <View style={styles.infoRow}>
-                  <Clock size={14} color="#886BC1" />
-                  <Text style={styles.infoText}>{booking?.time}</Text>
+          {booking?.babysitter && (
+            <View style={styles.card}>
+              <View style={styles.cardHeaderRow}>
+                <Baby size={18} color="#886BC1" />
+                <Text style={styles.cardTitle}>Niñera Asignada</Text>
+              </View>
+              <View style={styles.babysitterRow}>
+                <Image
+                  source={{
+                    uri:
+                      booking.babysitter?.photo ||
+                      "https://via.placeholder.com/150",
+                  }}
+                  style={styles.babysitterImage}
+                />
+                <View style={styles.babysitterInfo}>
+                  <Text style={styles.babysitterName}>
+                    {booking.babysitter?.name}
+                  </Text>
+                  {booking.babysitter?.phone && (
+                    <View style={styles.infoRow}>
+                      <Phone size={14} color="#886BC1" />
+                      <Text style={styles.infoText}>
+                        {booking.babysitter.phone}
+                      </Text>
+                    </View>
+                  )}
                 </View>
+                {booking.babysitter?.phone && (
+                  <TouchableOpacity
+                    style={styles.miniActionBtn}
+                    onPress={() =>
+                      Linking.openURL(`tel:${booking.babysitter.phone}`)
+                    }
+                  >
+                    <Phone size={18} color="#886BC1" />
+                  </TouchableOpacity>
+                )}
               </View>
-              <TouchableOpacity
-                style={styles.miniActionBtn}
-                onPress={() =>
-                  Linking.openURL(`tel:${booking?.babysitterPhone}`)
-                }
-              >
-                <Phone size={18} color="#886BC1" />
-              </TouchableOpacity>
             </View>
-          </View>
+          )}
 
-          {/* NIÑOS */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Baby size={18} color="#886BC1" />
-              <Text style={styles.cardTitle}>Niños a Cuidar</Text>
-            </View>
-            {booking?.childrenArray?.map((nino: any, index: number) => (
-              <View key={index} style={styles.childItem}>
-                <Text style={styles.childName}>
-                  {nino.nombre} •{" "}
-                  <Text style={styles.childAge}>{nino.edad} años</Text>
-                </Text>
-                {nino.nota ? (
-                  <Text style={styles.childNote}>Nota: {nino.nota}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-
-          {/* RESUMEN FINANCIERO */}
+          {/* PAGO */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <Receipt size={18} color="#886BC1" />
-              <Text style={styles.cardTitle}>Resumen de Pago</Text>
+              <Text style={styles.cardTitle}>Detalles de Pago</Text>
             </View>
             <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>Servicio Base</Text>
+              <Text style={styles.paymentLabel}>Método</Text>
+              <Text style={styles.paymentValue}>
+                {booking?.paymentMethod || "No especificado"}
+              </Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Tarifa por hora</Text>
+              <Text style={styles.paymentValue}>
+                L. {Number(booking?.hourlyRate || 0).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Horas programadas</Text>
+              <Text style={styles.paymentValue}>
+                {booking?.duracion_horas || 0} h
+              </Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Subtotal base</Text>
               <Text style={styles.paymentValue}>
                 L. {Number(booking?.baseAmount || 0).toFixed(2)}
               </Text>
@@ -312,8 +841,8 @@ export default function ClientJobTracking() {
             </View>
           </View>
 
-          {/* QR SECTION CON LÓGICA DE TIEMPO */}
-          {!isCompleted && (
+          {/* QR — solo cuando el servicio no ha finalizado */}
+          {!isCompleted && !canConfirmFinish && (
             <View style={styles.qrContainer}>
               {canShowQR ? (
                 !showQR ? (
@@ -329,7 +858,6 @@ export default function ClientJobTracking() {
                       const inicio = new Date(
                         `${booking.fecha_servicio}T${booking.hora_inicio}`,
                       ).getTime();
-
                       const UNA_HORA_EN_MS = 3600000;
 
                       if (
@@ -338,7 +866,7 @@ export default function ClientJobTracking() {
                       ) {
                         Alert.alert(
                           "Aún es muy pronto",
-                          `Podrás generar el QR 1 hora antes del servicio (a partir de las ${booking.hora_inicio.split(":")[0] - 1 || 0}: ${booking.hora_inicio.split(":")[1]}).`,
+                          `Podrás generar el QR 1 hora antes del servicio.`,
                         );
                       } else {
                         setShowQR(true);
@@ -410,6 +938,74 @@ export default function ClientJobTracking() {
           )}
         </View>
       </ScrollView>
+
+      {/* ── MODAL CONFIRMACIÓN FINALIZACIÓN ──────────────────────────────── */}
+      <Modal
+        visible={confirmModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <CheckCircle2 size={44} color="#886BC1" />
+            </View>
+
+            <Text style={styles.modalTitle}>Confirmar finalización</Text>
+            <Text style={styles.modalText}>
+              Al confirmar, se cerrará la reserva y se calculará el costo final
+              basado en las horas reales trabajadas por la niñera. Esta acción
+              no se puede deshacer.
+            </Text>
+
+            {booking?.tiempo_total_trabajado && (
+              <View style={styles.modalSummaryBox}>
+                <Text style={styles.modalSummaryLabel}>
+                  Horas registradas por la niñera:
+                </Text>
+                <Text style={styles.modalSummaryValue}>
+                  {parseFloat(booking.tiempo_total_trabajado).toFixed(2)} h
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setConfirmModalVisible(false)}
+                disabled={confirmingFinish}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  confirmingFinish && styles.disabledBtn,
+                ]}
+                onPress={handleConfirmFinish}
+                disabled={confirmingFinish}
+              >
+                {confirmingFinish ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.confirmBtnText}>Sí, confirmar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── PASARELA DE PAGO CON TARJETA ─────────────────────────────────── */}
+      <CardPaymentGateway
+        visible={showPaymentGateway}
+        total={Number(booking?.total || 0)}
+        onSubmit={handleCardPayment}
+        onClose={() => setShowPaymentGateway(false)}
+        submitting={paymentSubmitting}
+      />
     </SafeAreaView>
   );
 }
@@ -503,14 +1099,6 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   infoText: { fontSize: 13, color: "#666", marginLeft: 6 },
   miniActionBtn: { padding: 10, backgroundColor: "#F3E8FF", borderRadius: 12 },
-  childItem: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  childName: { fontSize: 15, fontWeight: "600", color: "#333" },
-  childAge: { fontWeight: "400", color: "#666" },
-  childNote: { fontSize: 12, color: "#888", marginTop: 2, fontStyle: "italic" },
   paymentRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -532,6 +1120,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalValue: { fontSize: 20, fontWeight: "800", color: "#886BC1" },
+
   qrContainer: { marginTop: 10 },
   generateQRButton: {
     backgroundColor: "#FF768A",
@@ -575,4 +1164,276 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: "500",
   },
+
+  // ── Banners de pago ──────────────────────────────────────────────────────
+  paymentPendingBanner: {
+    backgroundColor: "#F3EEFF",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: "#C4B5E8",
+    gap: 10,
+  },
+  paymentPendingTop: { flexDirection: "row", alignItems: "center", gap: 10 },
+  paymentPendingTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#886BC1",
+    flex: 1,
+  },
+  paymentPendingText: { fontSize: 13, color: "#555", lineHeight: 20 },
+  openPaymentBtn: {
+    backgroundColor: "#886BC1",
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  openPaymentBtnText: { color: "white", fontWeight: "700", fontSize: 14 },
+
+  paymentSuccessBadge: {
+    backgroundColor: "#ECFDF5",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  paymentSuccessText: { color: "#16A34A", fontWeight: "600", fontSize: 14 },
+
+  // ── Confirmación de finalización ──────────────────────────────────────────
+  confirmBanner: {
+    backgroundColor: "#F0EBFB",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: "#C4B5E8",
+    gap: 10,
+  },
+  confirmBannerTop: { flexDirection: "row", alignItems: "center", gap: 10 },
+  confirmBannerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#886BC1",
+    flex: 1,
+  },
+  confirmBannerText: { fontSize: 13, color: "#555", lineHeight: 20 },
+  confirmBannerButton: {
+    backgroundColor: "#886BC1",
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  confirmBannerButtonText: { color: "white", fontWeight: "700", fontSize: 14 },
+
+  confirmedBadge: {
+    backgroundColor: "#ECFDF5",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  confirmedBadgeText: { color: "#16A34A", fontWeight: "600", fontSize: 14 },
+
+  finalCalcCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1.5,
+    borderColor: "#886BC1",
+    elevation: 2,
+    shadowColor: "#886BC1",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  finalCalcTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#886BC1",
+    marginBottom: 14,
+  },
+
+  // Modal confirm finish
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 28,
+    paddingBottom: 40,
+    alignItems: "center",
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F0EBFB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#333",
+    marginBottom: 10,
+  },
+  modalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  modalSummaryBox: {
+    backgroundColor: "#F6F0FF",
+    borderRadius: 12,
+    padding: 14,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalSummaryLabel: { fontSize: 13, color: "#777", marginBottom: 4 },
+  modalSummaryValue: { fontSize: 22, fontWeight: "800", color: "#886BC1" },
+  modalButtons: { flexDirection: "row", gap: 12, width: "100%" },
+  cancelBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EEE",
+    alignItems: "center",
+  },
+  cancelBtnText: { color: "#555", fontWeight: "600" },
+  confirmBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#886BC1",
+    alignItems: "center",
+  },
+  confirmBtnText: { color: "white", fontWeight: "700" },
+  disabledBtn: { opacity: 0.6 },
+
+  // ── Pasarela de pago ─────────────────────────────────────────────────────
+  gatewayContainer: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+    maxHeight: "90%",
+  },
+  gatewayHeader: {
+    padding: 24,
+    paddingBottom: 20,
+  },
+  gatewayHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+  gatewayHeaderTitle: {
+    color: "#FFF",
+    fontSize: 20,
+    fontWeight: "800",
+    flex: 1,
+  },
+  gatewayHeaderSub: { color: "rgba(255,255,255,0.75)", fontSize: 13 },
+  lockBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  lockText: { fontSize: 11, fontWeight: "700", color: "#886BC1" },
+  totalBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+  },
+  totalBadgeLabel: { color: "rgba(255,255,255,0.8)", fontSize: 12 },
+  totalBadgeAmount: { color: "#FFF", fontSize: 28, fontWeight: "900" },
+
+  gatewayForm: { padding: 24, flexGrow: 0 },
+  fieldContainer: { marginBottom: 16 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#444",
+    marginBottom: 8,
+  },
+  fieldInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F8F6FF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: "#E8E0F5",
+  },
+  fieldError: { borderColor: "#FF768A" },
+  fieldInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#222",
+    fontWeight: "500",
+  },
+  fieldRow: { flexDirection: "row", gap: 12 },
+  errorText: { fontSize: 11, color: "#FF768A", marginTop: 4, marginLeft: 4 },
+  securityNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+  },
+  securityNoteText: { flex: 1, fontSize: 11, color: "#777", lineHeight: 16 },
+
+  gatewayButtons: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 20,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+  },
+  cancelGatewayBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#EEE",
+    alignItems: "center",
+  },
+  cancelGatewayText: { color: "#555", fontWeight: "600" },
+  payBtn: {
+    flex: 2,
+    flexDirection: "row",
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#886BC1",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  payBtnText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
 });

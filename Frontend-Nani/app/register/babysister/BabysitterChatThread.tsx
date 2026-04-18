@@ -1,30 +1,30 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  TextInput,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-  StatusBar,
-} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
-  Send,
-  Paperclip,
   Image as ImageIcon,
-  Smile,
-  Phone,
   MoreVertical,
+  Paperclip,
+  Phone,
+  Send,
+  Smile,
 } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 type Message = {
@@ -34,7 +34,7 @@ type Message = {
   createdAt: string;
 };
 
-export default function ChatScreen() {
+export default function BabysitterChatThread() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const listRef = useRef<FlatList<Message>>(null);
@@ -47,11 +47,11 @@ export default function ChatScreen() {
 
   const counterpart = useMemo(
     () => ({
-      name: String(params.babysitterName ?? "Chat"),
-      photo: String(params.babysitterPhoto ?? ""),
+      name: String(params.clientName ?? "Chat"),
+      photo: String(params.clientPhoto ?? ""),
       status: "Reserva confirmada",
     }),
-    [params.babysitterName, params.babysitterPhoto],
+    [params.clientName, params.clientPhoto],
   );
 
   const fetchConversation = useCallback(async () => {
@@ -140,14 +140,14 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="#886BC1" />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.headerIconButton}
@@ -214,7 +214,7 @@ export default function ChatScreen() {
                     <View
                       style={[
                         styles.messageBubble,
-                        isUser ? styles.userBubble : styles.babysitterBubble,
+                        isUser ? styles.userBubble : styles.clientBubble,
                       ]}
                     >
                       <Text
@@ -296,7 +296,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#886BC1",
   },
   container: {
     flex: 1,
@@ -305,6 +305,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "#886BC1",
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -375,7 +376,7 @@ const styles = StyleSheet.create({
   messagesContent: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingBottom: 10,
+    paddingBottom: 24,
   },
   messageRow: {
     marginBottom: 14,
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  babysitterBubble: {
+  clientBubble: {
     backgroundColor: "#F6D9F1",
     borderBottomLeftRadius: 8,
   },
@@ -430,7 +431,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F1F1F1",
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingTop: 12,
     flexDirection: "row",
     alignItems: "flex-end",
   },
@@ -483,4 +484,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
 });
+
 
