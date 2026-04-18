@@ -161,6 +161,9 @@ export class ClientesService {
         estado,
         fecha_servicio,
         created_at,
+        updated_at,
+        emergencia_activa,
+        motivo_emergencia,
         ninera:ninera_id (
           persona:persona_id (
             nombre,
@@ -207,7 +210,32 @@ export class ClientesService {
 
     const userId = (perfil as any).usuario_id;
 
+    // Notificaciones de emergencia (siempre al inicio, sin leer)
+    const emergencyItems = (reservas || [])
+      .filter((r: any) => r.emergencia_activa === true)
+      .map((reserva: any) => {
+        const persona = Array.isArray(reserva.ninera?.persona)
+          ? reserva.ninera.persona[0]
+          : reserva.ninera?.persona;
+        const nineraNombre = persona
+          ? `${persona.nombre} ${persona.apellido}`.trim()
+          : 'Tu niñera';
+        return {
+          id: `emergency-${reserva.id}`,
+          title: '🚨 EMERGENCIA',
+          message: `${nineraNombre} reportó una emergencia: ${reserva.motivo_emergencia || 'Sin descripción'}`,
+          time: this.formatRelativeTime(
+            reserva.updated_at || reserva.created_at,
+          ),
+          read: false,
+          icon: 'alert',
+          color: '#EF4444',
+          createdAt: reserva.updated_at || reserva.created_at,
+        };
+      });
+
     const notificationItems = [
+      ...emergencyItems,
       ...(reservas || []).map((reserva: any) => {
         const persona = Array.isArray(reserva.ninera?.persona)
           ? reserva.ninera.persona[0]
@@ -263,7 +291,9 @@ export class ClientesService {
             : [];
           return (
             item.sender?.id !== userId &&
-            participantes.some((participant: any) => participant.usuario_id === userId)
+            participantes.some(
+              (participant: any) => participant.usuario_id === userId,
+            )
           );
         })
         .slice(0, 10)

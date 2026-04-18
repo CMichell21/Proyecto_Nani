@@ -648,6 +648,8 @@ export class ReservasService {
       estado_comprobacion,
       duracion_horas,
       notas_importantes,
+      emergencia_activa,
+      motivo_emergencia,
       metodo_pago:metodo_pago_id (nombre),
       direccion:direccion_id (
         direccion_completa,
@@ -739,6 +741,8 @@ export class ReservasService {
       tip: pago?.propina || 0,
       total: data.monto_total,
       paymentMethod: metodo_pago?.nombre || '',
+      emergencia_activa: (data as any).emergencia_activa ?? false,
+      motivo_emergencia: (data as any).motivo_emergencia ?? null,
     };
   }
 
@@ -1157,6 +1161,74 @@ export class ReservasService {
       success: true,
       message: '¡Reseña publicada exitosamente!',
       data: nuevaResena,
+    };
+  }
+
+  async reportarEmergencia(
+    reservaId: string,
+    motivo: string,
+    authUserId: string,
+  ) {
+    const admin = this.supabaseService.getAdminClient();
+
+    if (!motivo || motivo.trim().length < 5) {
+      throw new BadRequestException(
+        'Debes describir la emergencia (mínimo 5 caracteres).',
+      );
+    }
+
+    // Verificar que la niñera es la asignada a esta reserva
+    const { data: usuario } = await admin
+      .from('usuario')
+      .select('id')
+      .eq('auth_id', authUserId)
+      .maybeSingle();
+
+    if (!usuario) throw new BadRequestException('Usuario no encontrado.');
+
+    const { data: ninera } = await admin
+      .from('ninera')
+      .select('id')
+      .eq('usuario_id', usuario.id)
+      .maybeSingle();
+
+    if (!ninera) throw new BadRequestException('Perfil de niñera no encontrado.');
+
+    const { data: reserva, error: errReserva } = await admin
+      .from('reserva')
+      .select('id, estado, ninera_id')
+      .eq('id', reservaId)
+      .maybeSingle();
+
+    if (errReserva || !reserva)
+      throw new NotFoundException('Reserva no encontrada.');
+
+    if (ninera.id !== reserva.ninera_id)
+      throw new ForbiddenException('No tienes permiso sobre esta reserva.');
+
+    if (reserva.estado !== 'en_progreso') {
+      throw new BadRequestException(
+        'Solo se puede reportar una emergencia cuando el servicio está en progreso.',
+      );
+    }
+
+    const { error } = await admin
+      .from('reserva')
+      .update({
+        emergencia_activa: true,
+        motivo_emergencia: motivo.trim(),
+      })
+      .eq('id', reservaId);
+
+    if (error) {
+      throw new InternalServerErrorException(
+        `Error al registrar la emergencia: ${error.message}`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Emergencia reportada. El padre de familia fue notificado.',
     };
   }
 
