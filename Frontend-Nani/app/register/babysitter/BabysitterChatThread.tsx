@@ -11,7 +11,6 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  StatusBar,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -23,7 +22,6 @@ import {
   Image as ImageIcon,
   Smile,
   Phone,
-  MoreVertical,
 } from "lucide-react-native";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
@@ -34,7 +32,7 @@ type Message = {
   createdAt: string;
 };
 
-export default function ChatScreen() {
+export default function BabysitterChatThread() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const listRef = useRef<FlatList<Message>>(null);
@@ -47,11 +45,11 @@ export default function ChatScreen() {
 
   const counterpart = useMemo(
     () => ({
-      name: String(params.babysitterName ?? "Chat"),
-      photo: String(params.babysitterPhoto ?? ""),
+      name: String(params.clientName ?? "Cliente"),
+      photo: String(params.clientPhoto ?? ""),
       status: "Reserva confirmada",
     }),
-    [params.babysitterName, params.babysitterPhoto],
+    [params.clientName, params.clientPhoto],
   );
 
   const fetchConversation = useCallback(async () => {
@@ -125,7 +123,6 @@ export default function ChatScreen() {
         },
         body: JSON.stringify({ mensaje: cleanMessage }),
       });
-
       const data = await response.json();
 
       if (!response.ok) {
@@ -140,46 +137,40 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
-      <StatusBar barStyle="light-content" backgroundColor="#886BC1" />
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "padding"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 18}
       >
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.headerIconButton}
-            activeOpacity={0.8}
-          >
-            <ArrowLeft size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.headerCenter}>
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={{
-                  uri: counterpart.photo || "https://via.placeholder.com/150",
-                }}
-                style={styles.avatar}
-              />
-              <View style={styles.onlineDot} />
-            </View>
-
-            <View style={styles.headerTextBlock}>
-              <Text style={styles.headerName}>{counterpart.name}</Text>
-              <Text style={styles.headerStatus}>{counterpart.status}</Text>
-            </View>
-          </View>
-
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-              <Phone size={18} color="#FFFFFF" />
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.circleButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft color="white" size={20} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-              <MoreVertical size={18} color="#FFFFFF" />
+            <View style={styles.profileRow}>
+              <View style={styles.avatarContainer}>
+                <Image
+                  source={{
+                    uri: counterpart.photo || "https://via.placeholder.com/150",
+                  }}
+                  style={styles.avatar}
+                />
+                <View style={styles.onlineDot} />
+              </View>
+
+              <View>
+                <Text style={styles.name}>{counterpart.name}</Text>
+                <Text style={styles.status}>{counterpart.status}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.circleButton}>
+              <Phone color="white" size={20} />
             </TouchableOpacity>
           </View>
         </View>
@@ -193,6 +184,7 @@ export default function ChatScreen() {
             ref={listRef}
             data={messages}
             keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messagesContainer}
             keyboardShouldPersistTaps="handled"
             onContentSizeChange={scrollToLatestMessage}
             renderItem={({ item }) => {
@@ -202,15 +194,10 @@ export default function ChatScreen() {
                 <View
                   style={[
                     styles.messageRow,
-                    isUser ? styles.messageRowRight : styles.messageRowLeft,
+                    { justifyContent: isUser ? "flex-end" : "flex-start" },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.messageWrapper,
-                      isUser && styles.messageWrapperUser,
-                    ]}
-                  >
+                  <View style={{ maxWidth: "75%" }}>
                     <View
                       style={[
                         styles.messageBubble,
@@ -218,10 +205,7 @@ export default function ChatScreen() {
                       ]}
                     >
                       <Text
-                        style={[
-                          styles.messageText,
-                          isUser && styles.userMessageText,
-                        ]}
+                        style={isUser ? styles.userText : styles.babysitterText}
                       >
                         {item.text}
                       </Text>
@@ -229,8 +213,8 @@ export default function ChatScreen() {
 
                     <Text
                       style={[
-                        styles.messageTime,
-                        isUser && styles.messageTimeRight,
+                        styles.time,
+                        { textAlign: isUser ? "right" : "left" },
                       ]}
                     >
                       {formatTime(item.createdAt)}
@@ -239,53 +223,45 @@ export default function ChatScreen() {
                 </View>
               );
             }}
-            contentContainerStyle={styles.messagesContent}
-            style={styles.messagesList}
-            showsVerticalScrollIndicator={false}
           />
         )}
 
         <View
           style={[
-            styles.inputArea,
+            styles.inputContainer,
             { paddingBottom: Math.max(insets.bottom, 12) },
           ]}
         >
-          <TouchableOpacity style={styles.secondaryActionButton}>
-            <Paperclip size={18} color="#6B7280" />
+          <TouchableOpacity style={styles.iconButton}>
+            <Paperclip color="#777" size={20} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryActionButton}>
-            <ImageIcon size={18} color="#6B7280" />
+          <TouchableOpacity style={styles.iconButton}>
+            <ImageIcon color="#777" size={20} />
           </TouchableOpacity>
 
-          <View style={styles.inputWrapper}>
+          <View style={styles.inputBox}>
             <TextInput
+              placeholder="Escribe un mensaje..."
               value={message}
               onChangeText={setMessage}
-              placeholder="Escribe un mensaje..."
-              placeholderTextColor="#9CA3AF"
               style={styles.input}
-              multiline
-              maxLength={500}
               onFocus={scrollToLatestMessage}
             />
 
-            <TouchableOpacity style={styles.smileButton} activeOpacity={0.8}>
-              <Smile size={18} color="#9CA3AF" />
+            <TouchableOpacity>
+              <Smile color="#999" size={20} />
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!message.trim()}
             style={[
               styles.sendButton,
-              !message.trim() && styles.sendButtonDisabled,
+              { backgroundColor: message.trim() ? "#FF768A" : "#EEE" },
             ]}
-            activeOpacity={0.85}
           >
-            <Send size={18} color={message.trim() ? "#FFFFFF" : "#9CA3AF"} />
+            <Send size={20} color={message.trim() ? "white" : "#999"} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -296,191 +272,138 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#886BC1",
   },
   container: {
     flex: 1,
     backgroundColor: "#FAFAFA",
   },
   header: {
+    paddingBottom: 15,
+    paddingHorizontal: 20,
     backgroundColor: "#886BC1",
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  headerIconButton: {
+  circleButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
-  headerCenter: {
-    flex: 1,
+  profileRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 12,
+    flex: 1,
+    marginLeft: 10,
+    gap: 10,
   },
-  avatarWrapper: {
+  avatarContainer: {
     position: "relative",
-    marginRight: 10,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-    backgroundColor: "#E5E7EB",
+    width: 45,
+    height: 45,
+    borderRadius: 25,
   },
   onlineDot: {
     position: "absolute",
-    right: -1,
-    bottom: -1,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#4ADE80",
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 10,
+    backgroundColor: "#22c55e",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: "white",
   },
-  headerTextBlock: {
-    flex: 1,
-  },
-  headerName: {
-    color: "#FFFFFF",
+  name: {
+    color: "white",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
   },
-  headerStatus: {
-    color: "rgba(255,255,255,0.85)",
+  status: {
+    color: "white",
+    opacity: 0.8,
     fontSize: 12,
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: "row",
-    gap: 8,
   },
   loadingState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  messagesList: {
-    flex: 1,
-    backgroundColor: "#FAFAFA",
-  },
-  messagesContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 10,
+  messagesContainer: {
+    padding: 20,
   },
   messageRow: {
-    marginBottom: 14,
     flexDirection: "row",
-  },
-  messageRowLeft: {
-    justifyContent: "flex-start",
-  },
-  messageRowRight: {
-    justifyContent: "flex-end",
-  },
-  messageWrapper: {
-    maxWidth: "78%",
-  },
-  messageWrapperUser: {
-    alignItems: "flex-end",
+    marginBottom: 12,
   },
   messageBubble: {
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  babysitterBubble: {
-    backgroundColor: "#F6D9F1",
-    borderBottomLeftRadius: 8,
+    padding: 12,
+    borderRadius: 20,
   },
   userBubble: {
     backgroundColor: "#FF768A",
-    borderBottomRightRadius: 8,
+    borderBottomRightRadius: 6,
   },
-  messageText: {
-    fontSize: 14,
+  babysitterBubble: {
+    backgroundColor: "#F6D9F1",
+    borderBottomLeftRadius: 6,
+  },
+  userText: {
+    color: "white",
+  },
+  babysitterText: {
     color: "#2E2E2E",
-    lineHeight: 20,
   },
-  userMessageText: {
-    color: "#FFFFFF",
-  },
-  messageTime: {
+  time: {
     fontSize: 11,
-    color: "#9CA3AF",
+    color: "#999",
     marginTop: 4,
-    marginLeft: 8,
   },
-  messageTimeRight: {
-    marginRight: 8,
-    marginLeft: 0,
-    textAlign: "right",
-  },
-  inputArea: {
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#F1F1F1",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  inputContainer: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
+    padding: 15,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: "#eee",
+    backgroundColor: "white",
+    gap: 10,
   },
-  secondaryActionButton: {
-    width: 40,
-    height: 40,
+  iconButton: {
+    width: 38,
+    height: 38,
     borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F1F1F1",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
   },
-  inputWrapper: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 110,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 24,
+  inputBox: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    paddingLeft: 14,
-    paddingRight: 8,
-    paddingVertical: 4,
+    alignItems: "center",
+    flex: 1,
+    backgroundColor: "#F1F1F1",
+    borderRadius: 25,
+    paddingHorizontal: 15,
   },
   input: {
     flex: 1,
-    fontSize: 14,
-    color: "#2E2E2E",
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingRight: 6,
-  },
-  smileButton: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
+    paddingVertical: 10,
   },
   sendButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#FF768A",
+    width: 45,
+    height: 45,
+    borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
-  },
-  sendButtonDisabled: {
-    backgroundColor: "#F3F4F6",
   },
 });
+
 

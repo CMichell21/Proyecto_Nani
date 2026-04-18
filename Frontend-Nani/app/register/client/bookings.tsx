@@ -1,40 +1,43 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  RefreshControl,
-  SafeAreaView,
-  Modal,
-  TextInput,
-  Alert,
-} from "react-native";
-import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ENDPOINTS } from "../../../constants/apiConfig";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ArrowLeft,
   Calendar,
+  CheckCircle2,
   Clock3,
   MapPin,
-  Star,
   MessageCircle,
-  CheckCircle2,
-  XCircle,
   QrCode,
+  Star,
   Timer,
+  XCircle,
 } from "lucide-react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Image,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ENDPOINTS } from "../../../constants/apiConfig";
 
 type BookingStatus =
   | "confirmed"
   | "pending"
   | "completed"
   | "cancelled"
-  | "en_progreso";
+  | "en_progreso"
+  | "rejected";
 
 export default function BookingsListScreen() {
   const router = useRouter();
@@ -47,8 +50,12 @@ export default function BookingsListScreen() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [sendingReview, setSendingReview] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState(""); 
+  const [sendingCancel, setSendingCancel] = useState(false); 
+  const [cancelWarning, setCancelWarning] = useState<string | null>(null); 
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       if (!refreshing) setLoading(true);
       const userId = await AsyncStorage.getItem("userId");
@@ -76,8 +83,10 @@ export default function BookingsListScreen() {
         location: item.location || "Ubicación no especificada",
         status: item.status as BookingStatus,
         amount: item.amount,
-        rating: item.rating || 5.0,
+        rating: item.rating ?? 0.0,
         reviewed: item.reviewed || false,
+        motivo_rechazo: item.motivo_rechazo || null,
+        motivo_cancelacion: item.motivo_cancelacion || null,
       }));
 
       setBookings(mapped);
@@ -87,7 +96,7 @@ export default function BookingsListScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshing]);
 
   const handlePostReview = async () => {
     const comentarioLimpio = comment.trim();
@@ -130,9 +139,69 @@ export default function BookingsListScreen() {
     }
   };
 
+  const handleCancelBooking = async () => {
+    if (!cancelReason.trim() || cancelReason.trim().length < 5) {
+      Alert.alert(
+        "Atención",
+        "Por favor escribe un motivo (mínimo 5 caracteres).",
+      );
+      return;
+    }
+    try {
+      setSendingCancel(true);
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await fetch(
+        ENDPOINTS.cancelar_reserva(selectedBooking.id),
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ motivo_cancelacion: cancelReason.trim() }),
+        },
+      );
+      const result = await response.json();
+      if (response.ok) {
+        if (result.advertencia) {
+          Alert.alert("Reserva cancelada", result.advertencia);
+        } else {
+          Alert.alert(
+            "Reserva cancelada",
+            "Tu reserva ha sido cancelada exitosamente.",
+          );
+        }
+        setCancelModalVisible(false);
+        setCancelReason("");
+        await fetchBookings();
+      } else {
+        Alert.alert(
+          "Error",
+          result.message || "No se pudo cancelar la reserva.",
+        );
+      }
+    } catch {
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setSendingCancel(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchBookings();
+    }, [fetchBookings]),
+  );
+
   useEffect(() => {
-    fetchBookings();
-  }, []);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        fetchBookings();
+      }
+    });
+
+    return () => sub.remove();
+  }, [fetchBookings]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -148,7 +217,7 @@ export default function BookingsListScreen() {
         label: "Confirmada",
       },
       en_progreso: {
-        bg: "#F3E8FF",
+        bg: "rgba(136, 107, 193, 0.15)", // Ajustado al morado de la app
         color: "#886BC1",
         icon: <Timer size={12} color="#886BC1" />,
         label: "En curso",
@@ -160,16 +229,22 @@ export default function BookingsListScreen() {
         label: "Pendiente",
       },
       completed: {
-        bg: "#F6D9F1",
+        bg: "rgba(136, 107, 193, 0.15)", // Ajustado al morado de la app
         color: "#886BC1",
         icon: <CheckCircle2 size={12} color="#886BC1" />,
         label: "Completada",
       },
       cancelled: {
         bg: "#FEF2F2",
+        color: "#EF4444",
+        icon: <XCircle size={12} color="#EF4444" />,
+        label: "Cancelada",
+      },
+      rejected: {
+        bg: "#FFF1F0",
         color: "#DC2626",
         icon: <XCircle size={12} color="#DC2626" />,
-        label: "Cancelada",
+        label: "Rechazada",
       },
     };
     const config = badges[status] || badges.pending;
@@ -183,10 +258,6 @@ export default function BookingsListScreen() {
     );
   };
 
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
   const upcomingBookings = bookings.filter((b) => {
     return (
       b.status === "confirmed" ||
@@ -196,19 +267,23 @@ export default function BookingsListScreen() {
   });
 
   const pastBookings = bookings.filter((b) => {
-    return b.status === "completed" || b.status === "cancelled";
+    return (
+      b.status === "completed" ||
+      b.status === "cancelled" ||
+      b.status === "rejected"
+    );
   });
 
   if (loading && !refreshing) {
     return (
       <View style={[styles.safeArea, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#886BC1" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -220,15 +295,24 @@ export default function BookingsListScreen() {
           />
         }
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <ArrowLeft size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mis reservas</Text>
-        </View>
+        {/* HEADER CON DEGRADADO */}
+        <LinearGradient
+          colors={["#886BC1", "#FF768A"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.8}
+            >
+              <ArrowLeft size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Mis reservas</Text>
+          </View>
+        </LinearGradient>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Próximas</Text>
@@ -270,7 +354,7 @@ export default function BookingsListScreen() {
                     </Text>
                   </View>
                   <View style={styles.bookingInfoRow}>
-                    <MapPin size={16} color="#886BC1" />
+                    <MapPin size={16} color="#8D8D8D" />
                     <Text style={styles.bookingInfoText} numberOfLines={1}>
                       {booking.location}
                     </Text>
@@ -287,11 +371,28 @@ export default function BookingsListScreen() {
                           params: { bookingId: booking.id },
                         })
                       }
+                      activeOpacity={0.8}
                     >
                       <QrCode size={16} color="#16A34A" />
                       <Text style={styles.qrEntryButtonText}>Entrada</Text>
                     </TouchableOpacity>
                   </View>
+                )}
+                
+                {booking.status === "confirmed" && (
+                  <TouchableOpacity
+                    style={styles.cancelBookingButton}
+                    onPress={() => {
+                      setSelectedBooking(booking);
+                      setCancelModalVisible(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <XCircle size={16} color="#EF4444" />
+                    <Text style={styles.cancelBookingText}>
+                      Cancelar reserva
+                    </Text>
+                  </TouchableOpacity>
                 )}
 
                 {booking.status === "en_progreso" && (
@@ -300,10 +401,11 @@ export default function BookingsListScreen() {
                       style={styles.qrExitButton}
                       onPress={() =>
                         router.push({
-                          pathname: "/register/client/ClientJobTracking",
+                          pathname: "/register/client/ClientActiveSession",
                           params: { bookingId: booking.id },
                         })
                       }
+                      activeOpacity={0.8}
                     >
                       <QrCode size={16} color="#EA580C" />
                       <Text style={styles.qrExitButtonText}>Salida</Text>
@@ -314,7 +416,7 @@ export default function BookingsListScreen() {
                 <View style={styles.cardFooter}>
                   <Text style={styles.amountText}>{booking.amount}</Text>
                   <View style={styles.cardFooterActions}>
-                    <TouchableOpacity style={styles.chatButton}>
+                    <TouchableOpacity style={styles.chatButton} activeOpacity={0.8}>
                       <MessageCircle size={16} color="#886BC1" />
                       <Text style={styles.chatButtonText}>Chat</Text>
                     </TouchableOpacity>
@@ -326,6 +428,7 @@ export default function BookingsListScreen() {
                           params: { bookingId: booking.id },
                         })
                       }
+                      activeOpacity={0.8}
                     >
                       <Text style={styles.detailsButtonText}>Ver detalles</Text>
                     </TouchableOpacity>
@@ -335,7 +438,7 @@ export default function BookingsListScreen() {
             ))
           ) : (
             <Text style={styles.emptyTextSeccion}>
-              No hay reservas próximas
+              No hay reservas próximas.
             </Text>
           )}
         </View>
@@ -362,6 +465,57 @@ export default function BookingsListScreen() {
                     </View>
                   </View>
                 </View>
+
+                {booking.status === "rejected" && (
+                  <View style={styles.rejectionNote}>
+                    <XCircle size={16} color="#DC2626" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rejectionText}>
+                        Motivo: {booking.motivo_rechazo || "No especificado"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.rejectionText,
+                          { fontSize: 12, marginTop: 2 },
+                        ]}
+                      >
+                        Fecha: {booking.date}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                
+                {booking.status === "cancelled" && (
+                  <View
+                    style={[
+                      styles.rejectionNote,
+                      {
+                        backgroundColor: "#FFF1F2", // Rojo muy claro
+                        borderColor: "#FECDD3",
+                        borderWidth: 1,
+                      },
+                    ]}
+                  >
+                    <XCircle size={16} color="#EF4444" />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.rejectionText,
+                          { color: "#2E2E2E", fontWeight: "700" },
+                        ]}
+                      >
+                        Reserva Cancelada
+                      </Text>
+                      <Text
+                        style={{ color: "#8D8D8D", fontSize: 13, marginTop: 2 }}
+                      >
+                        Motivo:{" "}
+                        {booking.motivo_cancelacion ||
+                          "No se especificó un motivo"}
+                      </Text>
+                    </View>
+                  </View>
+                )}
                 <View style={styles.cardFooter}>
                   <Text style={styles.historyAmountText}>{booking.amount}</Text>
                   <TouchableOpacity
@@ -377,6 +531,7 @@ export default function BookingsListScreen() {
                       }
                     }}
                     disabled={booking.reviewed}
+                    activeOpacity={0.8}
                   >
                     <Text
                       style={
@@ -393,13 +548,14 @@ export default function BookingsListScreen() {
             ))
           ) : (
             <Text style={styles.emptyTextSeccion}>
-              No hay historial disponible
+              No hay historial disponible.
             </Text>
           )}
         </View>
       </ScrollView>
+
       {/* --- MODAL DE CALIFICACIÓN --- */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      <Modal visible={modalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Calificar servicio</Text>
@@ -408,10 +564,10 @@ export default function BookingsListScreen() {
             </Text>
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map((s) => (
-                <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                <TouchableOpacity key={s} onPress={() => setRating(s)} activeOpacity={0.8}>
                   <Star
-                    size={32}
-                    color={s <= rating ? "#FF768A" : "#D1D5DB"}
+                    size={36}
+                    color={s <= rating ? "#FF768A" : "#E5E7EB"}
                     fill={s <= rating ? "#FF768A" : "transparent"}
                   />
                 </TouchableOpacity>
@@ -420,6 +576,7 @@ export default function BookingsListScreen() {
             <TextInput
               style={styles.textInput}
               placeholder="Escribe tu comentario..."
+              placeholderTextColor="#9A9A9A"
               multiline
               value={comment}
               onChangeText={setComment}
@@ -428,6 +585,7 @@ export default function BookingsListScreen() {
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setModalVisible(false)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
               </TouchableOpacity>
@@ -435,6 +593,7 @@ export default function BookingsListScreen() {
                 style={styles.submitButton}
                 onPress={handlePostReview}
                 disabled={sendingReview}
+                activeOpacity={0.8}
               >
                 {sendingReview ? (
                   <ActivityIndicator color="#FFF" size="small" />
@@ -446,163 +605,216 @@ export default function BookingsListScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* --- MODAL DE CANCELACIÓN --- */}
+      <Modal visible={cancelModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cancelar reserva</Text>
+            <Text style={styles.modalSubtitle}>
+              Esta acción no se puede deshacer. Por favor indica el motivo.
+            </Text>
+            {cancelWarning && (
+              <View style={styles.warningContainer}>
+                <Text style={styles.warningText}>{cancelWarning}</Text>
+              </View>
+            )}
+            <TextInput
+              style={styles.textInput}
+              placeholder="Motivo de cancelación..."
+              placeholderTextColor="#9A9A9A"
+              multiline
+              value={cancelReason}
+              onChangeText={setCancelReason}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setCancelModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitButton, { backgroundColor: "#EF4444" }]}
+                onPress={handleCancelBooking}
+                disabled={sendingCancel}
+                activeOpacity={0.8}
+              >
+                {sendingCancel ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    Confirmar cancelación
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#FAFAFA" },
-  container: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: "#886BC1" },
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
   scrollContent: { paddingBottom: 110 },
+  
   header: {
-    backgroundColor: "#886BC1",
-    paddingHorizontal: 24,
-    paddingTop: 50,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 24,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
   },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginRight: 12,
   },
-  headerTitle: { color: "#FFFFFF", fontSize: 24, fontWeight: "700" },
-  section: { paddingHorizontal: 24, marginTop: 24 },
+  headerTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", flex: 1 },
+  
+  section: { paddingHorizontal: 16, marginTop: 24 },
   sectionTitle: {
     color: "#2E2E2E",
     fontSize: 20,
     fontWeight: "700",
-    marginBottom: 14,
+    marginBottom: 16,
   },
+  
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#F1F1F1",
-    elevation: 2,
+    elevation: 2, // Sombra suave en lugar de borde plano
   },
   avatar: { width: 64, height: 64, borderRadius: 32, marginRight: 14 },
-  cardTop: { flexDirection: "row", marginBottom: 14 },
+  cardTop: { flexDirection: "row", marginBottom: 16 },
   cardTopInfo: { flex: 1, justifyContent: "center" },
   cardTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  nameText: { color: "#2E2E2E", fontSize: 16, fontWeight: "700" },
-  ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  ratingText: { color: "#6B7280", fontSize: 12, marginLeft: 4 },
+  nameText: { color: "#2E2E2E", fontSize: 17, fontWeight: "700", marginBottom: 2 },
+  ratingRow: { flexDirection: "row", alignItems: "center" },
+  ratingText: { color: "#8D8D8D", fontSize: 13, marginLeft: 4, fontWeight: "600" },
+  
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    minWidth: 100,
+    paddingVertical: 6,
     justifyContent: "center",
   },
-  badgeText: { fontSize: 11, marginLeft: 4, fontWeight: "600" },
-  bookingInfoGroup: { marginBottom: 14 },
+  badgeText: { fontSize: 11, marginLeft: 4, fontWeight: "700" },
+  
+  bookingInfoGroup: { marginBottom: 16 },
   bookingInfoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  bookingInfoText: { color: "#6B7280", fontSize: 13, marginLeft: 8, flex: 1 },
-  qrButtonsRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  bookingInfoText: { color: "#8D8D8D", fontSize: 14, marginLeft: 8, flex: 1 },
+  
+  qrButtonsRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
   qrEntryButton: {
     flex: 1,
-    backgroundColor: "#F0FDF4",
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 16,
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  qrEntryButtonText: {
-    color: "#16A34A",
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 6,
-  },
+  qrEntryButtonText: { color: "#16A34A", fontSize: 14, fontWeight: "700", marginLeft: 6 },
   qrExitButton: {
     flex: 1,
     backgroundColor: "#FFF7ED",
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  qrExitButtonText: {
-    color: "#EA580C",
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 6,
+  qrExitButtonText: { color: "#EA580C", fontSize: 14, fontWeight: "700", marginLeft: 6 },
+  
+  cancelBookingButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 16,
+    marginBottom: 16,
   },
+  cancelBookingText: { color: "#EF4444", fontSize: 14, fontWeight: "700", marginLeft: 6 },
+  
   cardFooter: {
     borderTopWidth: 1,
-    borderTopColor: "#F1F1F1",
-    paddingTop: 14,
+    borderTopColor: "#F5F5F5",
+    paddingTop: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   amountText: { color: "#886BC1", fontSize: 18, fontWeight: "700" },
-  historyAmountText: { color: "#6B7280", fontSize: 15, fontWeight: "600" },
+  historyAmountText: { color: "#8D8D8D", fontSize: 16, fontWeight: "700" },
   cardFooterActions: { flexDirection: "row", gap: 8 },
   chatButton: {
-    backgroundColor: "#F6D9F1",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: "rgba(136, 107, 193, 0.1)", // Morado muy suave
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
   },
-  chatButtonText: {
-    color: "#886BC1",
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 4,
-  },
+  chatButtonText: { color: "#886BC1", fontSize: 13, fontWeight: "700", marginLeft: 6 },
   detailsButton: {
     backgroundColor: "#FF768A",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  detailsButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  detailsButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   reviewButton: {
     backgroundColor: "#FF768A",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  reviewButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  reviewButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
   reviewedButton: {
     backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  reviewedButtonText: { color: "#9CA3AF", fontSize: 12, fontWeight: "700" },
+  reviewedButtonText: { color: "#9A9A9A", fontSize: 13, fontWeight: "700" },
   emptyTextSeccion: {
-    color: "#9CA3AF",
-    fontSize: 14,
+    color: "#9A9A9A",
+    fontSize: 15,
     fontStyle: "italic",
     marginBottom: 20,
+    textAlign: "center",
   },
 
+  /* MODALS */
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     padding: 24,
   },
@@ -611,46 +823,60 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
+    elevation: 5,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#2E2E2E",
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  starsRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#2E2E2E", marginBottom: 8, textAlign: "center" },
+  modalSubtitle: { fontSize: 14, color: "#8D8D8D", textAlign: "center", marginBottom: 20, lineHeight: 20 },
+  starsRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
   textInput: {
     width: "100%",
     backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     height: 100,
     textAlignVertical: "top",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     marginBottom: 20,
+    fontSize: 15,
+    color: "#2E2E2E",
   },
   modalActions: { flexDirection: "row", gap: 12, width: "100%" },
   cancelButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: "#F3F4F6",
   },
-  cancelButtonText: { color: "#6B7280", fontWeight: "600" },
+  cancelButtonText: { color: "#8D8D8D", fontWeight: "600", fontSize: 15 },
   submitButton: {
-    flex: 2,
-    paddingVertical: 12,
+    flex: 1,
+    paddingVertical: 14,
     alignItems: "center",
-    borderRadius: 12,
-    backgroundColor: "#886BC1",
+    borderRadius: 16,
+    backgroundColor: "#FF768A", // Rosa de la app
   },
-  submitButtonText: { color: "#FFFFFF", fontWeight: "700" },
+  submitButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
+  
+  rejectionNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FFF1F2",
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  rejectionText: { color: "#EF4444", fontSize: 13, flex: 1, lineHeight: 18 },
+  warningContainer: {
+    backgroundColor: "#FEF3C7",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    width: "100%",
+  },
+  warningText: { color: "#92400E", fontSize: 13, fontWeight: "500", lineHeight: 18 },
 });
