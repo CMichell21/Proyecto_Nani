@@ -1,9 +1,5 @@
 
-const DEV_IP = "192.168.1.8";
-
-const PORT = "3000";
-
-export const API_URL = `http://${DEV_IP}:${PORT}`;
+export const API_URL = https://proyectonani-production.up.railway.app/
 
 const buildUrl = (path: string) => `${API_URL}${path}`;
 
