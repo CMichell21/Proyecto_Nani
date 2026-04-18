@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { router, useFocusEffect } from "expo-router";
 import {
   ArrowLeft,
   Award,
@@ -289,7 +289,7 @@ export default function BabysitterOwnProfile() {
   if (!profile) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <Text>No se pudo cargar el perfil.</Text>
+        <Text style={styles.loaderText}>No se pudo cargar el perfil.</Text>
       </View>
     );
   }
@@ -297,7 +297,7 @@ export default function BabysitterOwnProfile() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={handleChangePhoto}>
+        <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.8}>
           <Image source={{ uri: profileImage }} style={styles.headerImage} />
         </TouchableOpacity>
 
@@ -317,14 +317,14 @@ export default function BabysitterOwnProfile() {
             </View>
 
             <View style={styles.row}>
-              <MapPin size={14} color="#888" />
+              <MapPin size={14} color="#8D8D8D" />
               <Text style={styles.location}>{ubicacion}</Text>
             </View>
           </View>
 
-          <View>
+          <View style={styles.priceContainer}>
             <Text style={styles.price}>L {profile?.tarifa ?? 0}</Text>
-            <Text style={styles.priceLabel}>por hora</Text>
+            <Text style={styles.priceLabel}>/hora</Text>
           </View>
         </View>
 
@@ -339,7 +339,7 @@ export default function BabysitterOwnProfile() {
           <View style={styles.badge}>
             <Award size={14} color="#886BC1" />
             <Text style={styles.badgeText}>
-              {profile?.experiencia || "Sin experiencia registrada"}
+              {profile?.experiencia || "Sin experiencia"}
             </Text>
           </View>
         </View>
@@ -353,7 +353,7 @@ export default function BabysitterOwnProfile() {
 
         <View style={styles.statCard}>
           <Text style={styles.statValuePurple}>{stats.completedBookings}</Text>
-          <Text style={styles.statLabel}>Reservas completadas</Text>
+          <Text style={styles.statLabel}>Completadas</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -366,6 +366,7 @@ export default function BabysitterOwnProfile() {
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "profile" && styles.activeTab]}
           onPress={() => setActiveTab("profile")}
+          activeOpacity={0.8}
         >
           <Text style={activeTab === "profile" ? styles.tabTextActive : styles.tabText}>
             Mi Perfil
@@ -375,6 +376,7 @@ export default function BabysitterOwnProfile() {
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "bookings" && styles.activeTab]}
           onPress={() => setActiveTab("bookings")}
+          activeOpacity={0.8}
         >
           <Text style={activeTab === "bookings" ? styles.tabTextActive : styles.tabText}>
             Reservas
@@ -385,7 +387,7 @@ export default function BabysitterOwnProfile() {
       {activeTab === "profile" ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Presentacion</Text>
+            <Text style={styles.sectionTitle}>Presentación</Text>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => openEditModal("presentacion")}
@@ -395,7 +397,7 @@ export default function BabysitterOwnProfile() {
             </TouchableOpacity>
           </View>
           <Text style={styles.about}>
-            {profile?.presentacion || "Sin descripcion disponible."}
+            {profile?.presentacion || "Sin descripción disponible."}
           </Text>
 
           <View style={styles.sectionHeader}>
@@ -435,7 +437,7 @@ export default function BabysitterOwnProfile() {
           {certificaciones.length > 0 ? (
             certificaciones.map((cert: any, index: number) => (
               <View key={`${cert?.nombre}-${index}`} style={styles.certRow}>
-                <CheckCircle size={16} color="#FF768A" />
+                <CheckCircle size={18} color="#FF768A" />
                 <Text style={styles.certText}>{cert?.nombre || String(cert)}</Text>
               </View>
             ))
@@ -446,24 +448,26 @@ export default function BabysitterOwnProfile() {
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={() => setShowLogoutModal(true)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.logoutButtonText}>Cerrar sesion</Text>
+            <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.section}>
           <View style={styles.bookingSummaryCard}>
-            <Text style={styles.summaryTitle}>Resumen rapido</Text>
+            <Text style={styles.summaryTitle}>Resumen rápido</Text>
             <Text style={styles.summaryText}>
-              Este mes llevas L {stats.monthEarnings} y {stats.completedBookings} reservas completadas.
+              Este mes llevas <Text style={{fontWeight: "700", color: "#886BC1"}}>L {stats.monthEarnings}</Text> y {stats.completedBookings} reservas completadas.
             </Text>
             <Text style={styles.summaryText}>
-              Tambien tienes {stats.chats} chats activos con clientes.
+              También tienes {stats.chats} chats activos con clientes.
             </Text>
           </View>
         </View>
       )}
 
+      {/* MODAL DE EDICIÓN */}
       <Modal
         visible={!!editMode}
         transparent
@@ -473,13 +477,13 @@ export default function BabysitterOwnProfile() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {editMode === "presentacion" && "Editar presentacion"}
+              {editMode === "presentacion" && "Editar presentación"}
               {editMode === "habilidades" && "Editar habilidades"}
               {editMode === "certificaciones" && "Editar certificaciones"}
             </Text>
             <Text style={styles.modalText}>
               {editMode === "presentacion"
-                ? "Escribe una descripcion breve de tu perfil."
+                ? "Escribe una descripción breve de tu perfil."
                 : "Separa cada elemento con coma."}
             </Text>
 
@@ -495,6 +499,7 @@ export default function BabysitterOwnProfile() {
                   ? "Cuéntales a los clientes sobre ti"
                   : "Ejemplo: Paciencia, Primeros auxilios"
               }
+              placeholderTextColor="#A0A0A0"
               multiline={editMode === "presentacion"}
               textAlignVertical="top"
             />
@@ -522,6 +527,7 @@ export default function BabysitterOwnProfile() {
         </View>
       </Modal>
 
+      {/* MODAL DE CERRAR SESIÓN */}
       <Modal
         visible={showLogoutModal}
         transparent
@@ -530,9 +536,9 @@ export default function BabysitterOwnProfile() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Cerrar sesion</Text>
+            <Text style={styles.modalTitle}>Cerrar sesión</Text>
             <Text style={styles.modalText}>
-              Estas segura de que quieres cerrar sesion?
+              ¿Estás segura de que quieres cerrar tu sesión en Nani?
             </Text>
 
             <View style={styles.modalButtons}>
@@ -543,8 +549,8 @@ export default function BabysitterOwnProfile() {
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.confirmButton} onPress={handleLogout}>
-                <Text style={styles.confirmButtonText}>Cerrar sesion</Text>
+              <TouchableOpacity style={styles.logoutConfirmButton} onPress={handleLogout}>
+                <Text style={styles.confirmButtonText}>Cerrar sesión</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -555,139 +561,149 @@ export default function BabysitterOwnProfile() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FAFAFA" },
+  container: { flex: 1, backgroundColor: "#FAFAFA" }, // Fondo gris suave
   centerContent: { justifyContent: "center", alignItems: "center" },
+  loaderText: { marginTop: 10, fontSize: 16, color: "#886BC1", fontWeight: "600" },
+  
   headerContainer: { height: 240 },
-  headerImage: { width: "100%", height: "100%" },
+  headerImage: { width: "100%", height: "100%", resizeMode: "cover" },
   backBtn: {
     position: "absolute",
     top: 50,
-    left: 20,
-    backgroundColor: "white",
+    left: 16,
+    backgroundColor: "#FFFFFF",
     padding: 10,
-    borderRadius: 20,
+    borderRadius: 999,
+    elevation: 3,
   },
+  
   profileCard: {
-    backgroundColor: "white",
-    margin: 20,
-    padding: 20,
-    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 20, // Borde igual que HomeScreen
     marginTop: -30,
-    elevation: 5,
+    elevation: 2, // Sombra suave
   },
   profileTop: { flexDirection: "row", justifyContent: "space-between" },
   profileInfo: { flex: 1, marginRight: 10 },
-  name: { fontSize: 20, marginBottom: 6, fontWeight: "bold" },
-  row: { flexDirection: "row", alignItems: "center", gap: 5 },
-  rating: { marginLeft: 4, fontWeight: "700" },
-  location: { color: "#777", flexShrink: 1 },
-  price: { color: "#886BC1", fontSize: 22, fontWeight: "bold" },
-  priceLabel: { color: "#888", textAlign: "right" },
-  badges: { flexDirection: "row", gap: 10, marginTop: 10, flexWrap: "wrap" },
+  name: { fontSize: 20, fontWeight: "700", color: "#2E2E2E", marginBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  rating: { fontSize: 14, fontWeight: "600", color: "#2E2E2E" },
+  location: { fontSize: 13, color: "#8D8D8D", flexShrink: 1 },
+  
+  priceContainer: { alignItems: "flex-end" },
+  price: { color: "#886BC1", fontSize: 18, fontWeight: "700" },
+  priceLabel: { color: "#9A9A9A", fontSize: 13 },
+  
+  badges: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "#F6D9F1",
-    padding: 6,
-    borderRadius: 20,
+    gap: 6,
+    backgroundColor: "rgba(136, 107, 193, 0.1)", // Morado suave
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  badgeText: { fontSize: 12 },
+  badgeText: { fontSize: 12, color: "#886BC1", fontWeight: "600" },
+  
   statsRow: {
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 20,
+    gap: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   statCardPurple: {
-    flex: 1,
+    flex: 1.2,
     backgroundColor: "#886BC1",
-    padding: 18,
+    padding: 16,
     borderRadius: 20,
+    justifyContent: "center",
   },
   statCard: {
     flex: 1,
-    backgroundColor: "white",
-    padding: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
     borderRadius: 20,
     elevation: 2,
+    justifyContent: "center",
   },
-  statValue: { fontSize: 22, color: "white", fontWeight: "bold" },
-  statValuePurple: { fontSize: 22, color: "#886BC1", fontWeight: "bold" },
-  statLabel: { fontSize: 12, color: "#666", marginTop: 4 },
-  statLabelLight: { fontSize: 12, color: "white", marginTop: 4 },
+  statValue: { fontSize: 20, color: "#FFFFFF", fontWeight: "700" },
+  statValuePurple: { fontSize: 20, color: "#886BC1", fontWeight: "700" },
+  statLabel: { fontSize: 11, color: "#9A9A9A", marginTop: 4, fontWeight: "500" },
+  statLabelLight: { fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 4 },
+  
   tabs: {
     flexDirection: "row",
-    backgroundColor: "white",
-    margin: 20,
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginBottom: 16,
     borderRadius: 20,
-    padding: 5,
-    elevation: 3,
+    padding: 6,
+    elevation: 2,
   },
-  tabButton: { flex: 1, padding: 10, alignItems: "center" },
-  activeTab: { backgroundColor: "#FF768A", borderRadius: 15 },
-  tabText: { color: "#666" },
-  tabTextActive: { color: "white", fontWeight: "bold" },
-  section: { paddingHorizontal: 20, gap: 15, paddingBottom: 40 },
+  tabButton: { flex: 1, paddingVertical: 12, alignItems: "center", borderRadius: 16 },
+  activeTab: { backgroundColor: "#FF768A" }, // Rosa activo
+  tabText: { color: "#9A9A9A", fontSize: 14, fontWeight: "600" },
+  tabTextActive: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
+  
+  section: { paddingHorizontal: 16, gap: 16, paddingBottom: 40 },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: "600" },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#2E2E2E" },
   editButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
+    backgroundColor: "rgba(136, 107, 193, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
-  editText: { color: "#886BC1", fontWeight: "500" },
-  about: { color: "#666", lineHeight: 20 },
+  editText: { color: "#886BC1", fontSize: 13, fontWeight: "600" },
+  about: { color: "#8D8D8D", fontSize: 14, lineHeight: 22 },
+  
   skillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   skill: {
-    backgroundColor: "#F6D9F1",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    backgroundColor: "rgba(255, 118, 138, 0.1)", // Rosa suave
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
-  skillText: { fontSize: 13 },
-  certRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  certText: {
-    fontSize: 15,
-    color: "#374151",
-    flex: 1,
-  },
+  skillText: { fontSize: 13, color: "#FF768A", fontWeight: "600" },
+  
+  certRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
+  certText: { fontSize: 15, color: "#2E2E2E", flex: 1, fontWeight: "500" },
+  
   bookingSummaryCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2E2E2E",
-    marginBottom: 8,
-  },
-  summaryText: {
-    color: "#666",
-    marginBottom: 6,
-  },
-  logoutButton: {
-    marginTop: 20,
     backgroundColor: "#FFFFFF",
-    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+    elevation: 2,
+  },
+  summaryTitle: { fontSize: 17, fontWeight: "700", color: "#2E2E2E", marginBottom: 12 },
+  summaryText: { color: "#8D8D8D", fontSize: 14, marginBottom: 8, lineHeight: 22 },
+  
+  logoutButton: {
+    marginTop: 24,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
     borderColor: "#FECACA",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
   },
-  logoutButtonText: {
-    color: "#DC2626",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+  logoutButtonText: { color: "#DC2626", fontSize: 15, fontWeight: "700" },
+  
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.50)",
+    backgroundColor: "rgba(0,0,0,0.4)", // Un poco más claro
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -698,63 +714,46 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 24,
+    elevation: 5,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#2E2E2E",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  modalText: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 16,
-  },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#2E2E2E", textAlign: "center", marginBottom: 8 },
+  modalText: { fontSize: 14, color: "#8D8D8D", textAlign: "center", marginBottom: 20 },
+  
   input: {
     backgroundColor: "#F9FAFB",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
     color: "#2E2E2E",
   },
-  textArea: {
-    minHeight: 120,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    marginTop: 16,
-  },
+  textArea: { minHeight: 120 },
+  
+  modalButtons: { flexDirection: "row", marginTop: 24, gap: 12 },
   cancelButton: {
     flex: 1,
     backgroundColor: "#F3F4F6",
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: "center",
-    marginRight: 6,
   },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
+  cancelButtonText: { fontSize: 15, fontWeight: "600", color: "#8D8D8D" },
+  
   confirmButton: {
     flex: 1,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#FF768A", // Rosa de la app para guardar
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: "center",
-    marginLeft: 6,
   },
-  confirmButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  logoutConfirmButton: {
+    flex: 1,
+    backgroundColor: "#EF4444", // Mantenemos rojo para la acción destructiva (cerrar sesión)
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
   },
+  confirmButtonText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
 });
-
-

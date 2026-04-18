@@ -1,5 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -66,96 +67,104 @@ export default function BabysitterNotifications() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.replace("/register/babysister/BabysitterDashboard")}
-            >
-              <Ionicons name="arrow-back" size={22} color="white" />
-            </TouchableOpacity>
-
-            <Text style={styles.headerTitle}>Notificaciones</Text>
-
-            <View style={styles.bellContainer}>
-              <Ionicons name="notifications" size={24} color="white" />
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {unreadCount > 0 && (
-            <Text style={styles.unreadText}>{unreadCount} sin leer</Text>
-          )}
-        </View>
-
-        <View style={styles.notificationsContainer}>
-          {loading ? (
-            <View style={styles.centerState}>
-              <ActivityIndicator size="large" color="#886BC1" />
-            </View>
-          ) : notifications.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No hay notificaciones</Text>
-              <Text style={styles.emptyText}>
-                Aqui apareceran solicitudes, resenas y movimientos de tus reservas.
-              </Text>
-            </View>
-          ) : (
-            notifications.map((notification) => (
-              <View
-                key={notification.id}
-                style={[
-                  styles.notificationCard,
-                  !notification.read && styles.unreadCard,
-                ]}
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          
+          {/* APLICAMOS EL LINEAR GRADIENT IGUAL AL HOMESCREEN */}
+          <LinearGradient
+            colors={["#886BC1", "#FF768A"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.header}
+          >
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.replace("/register/babysister/BabysitterDashboard")}
+                activeOpacity={0.8}
               >
+                <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <Text style={styles.headerTitle}>Notificaciones</Text>
+
+              <View style={styles.bellContainer}>
+                <Ionicons name="notifications" size={24} color="#FFFFFF" />
+                {unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadCount}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {unreadCount > 0 && (
+              <Text style={styles.unreadText}>{unreadCount} sin leer</Text>
+            )}
+          </LinearGradient>
+
+          <View style={styles.notificationsContainer}>
+            {loading ? (
+              <View style={styles.centerState}>
+                <ActivityIndicator size="large" color="#886BC1" />
+              </View>
+            ) : notifications.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No hay notificaciones</Text>
+                <Text style={styles.emptyText}>
+                  Aquí aparecerán solicitudes, reseñas y movimientos de tus reservas.
+                </Text>
+              </View>
+            ) : (
+              notifications.map((notification) => (
                 <View
+                  key={notification.id}
                   style={[
-                    styles.iconContainer,
-                    { backgroundColor: notification.color },
+                    styles.notificationCard,
+                    !notification.read && styles.unreadCard,
                   ]}
                 >
-                  {notification.icon === "calendar" && (
-                    <MaterialIcons
-                      name="calendar-month"
-                      size={22}
-                      color="white"
-                    />
-                  )}
-                  {notification.icon === "star" && (
-                    <FontAwesome name="star" size={20} color="white" />
-                  )}
-                  {notification.icon === "chatbubble" && (
-                    <Ionicons name="chatbubble" size={20} color="white" />
-                  )}
-                </View>
-
-                <View style={styles.notificationContent}>
-                  <View style={styles.titleRow}>
-                    <Text
-                      style={[
-                        styles.notificationTitle,
-                        !notification.read && styles.unreadTitle,
-                      ]}
-                    >
-                      {notification.title}
-                    </Text>
-                    {!notification.read && <View style={styles.unreadDot} />}
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: notification.color },
+                    ]}
+                  >
+                    {notification.icon === "calendar" && (
+                      <MaterialIcons
+                        name="calendar-month"
+                        size={22}
+                        color="#FFFFFF"
+                      />
+                    )}
+                    {notification.icon === "star" && (
+                      <FontAwesome name="star" size={20} color="#FFFFFF" />
+                    )}
+                    {notification.icon === "chatbubble" && (
+                      <Ionicons name="chatbubble" size={20} color="#FFFFFF" />
+                    )}
                   </View>
 
-                  <Text style={styles.message}>{notification.message}</Text>
-                  <Text style={styles.time}>{notification.time}</Text>
+                  <View style={styles.notificationContent}>
+                    <View style={styles.titleRow}>
+                      <Text
+                        style={[
+                          styles.notificationTitle,
+                          !notification.read && styles.unreadTitle,
+                        ]}
+                      >
+                        {notification.title}
+                      </Text>
+                      {!notification.read && <View style={styles.unreadDot} />}
+                    </View>
+
+                    <Text style={styles.message}>{notification.message}</Text>
+                    <Text style={styles.time}>{notification.time}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+              ))
+            )}
+          </View>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -164,44 +173,47 @@ export default function BabysitterNotifications() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#886BC1",
+    backgroundColor: "#886BC1", // Combina con el inicio del degradado
   },
   container: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#FAFAFA", // Fondo gris claro de la app
   },
   scrollContent: {
     paddingBottom: 24,
   },
   header: {
     paddingTop: 14,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: "#886BC1",
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   backButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.18)", // Mismo estilo translúcido que los chips
     padding: 10,
-    borderRadius: 20,
+    borderRadius: 999,
   },
   headerTitle: {
-    color: "white",
-    fontSize: 20,
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "700",
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 14,
   },
   bellContainer: {
     position: "relative",
+    marginRight: 6,
   },
   badge: {
     position: "absolute",
     top: -5,
     right: -5,
-    backgroundColor: "white",
+    backgroundColor: "#FFFFFF",
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -211,15 +223,19 @@ const styles = StyleSheet.create({
   badgeText: {
     color: "#FF768A",
     fontSize: 10,
+    fontWeight: "700",
   },
   unreadText: {
-    color: "white",
+    color: "#FFFFFF",
     marginTop: 10,
-    marginLeft: 50,
-    opacity: 0.8,
+    marginLeft: 46,
+    opacity: 0.9,
+    fontSize: 14,
+    fontWeight: "500",
   },
   notificationsContainer: {
-    padding: 20,
+    paddingTop: 18,
+    paddingHorizontal: 16,
   },
   centerState: {
     paddingVertical: 40,
@@ -227,50 +243,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyCard: {
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 24,
+    borderRadius: 20, // Igual que HomeScreen
     alignItems: "center",
+    elevation: 2,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: "#2E2E2E",
     marginBottom: 8,
   },
   emptyText: {
-    color: "#666",
+    color: "#8D8D8D",
     textAlign: "center",
+    lineHeight: 22,
   },
   notificationCard: {
     flexDirection: "row",
-    backgroundColor: "white",
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#eee",
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 20, // Igual que HomeScreen
+    marginBottom: 14,
+    elevation: 2, // Reemplazamos los bordes planos por sombra
   },
   unreadCard: {
-    borderColor: "#FF768A",
-    borderWidth: 2,
+    borderWidth: 1.5,
+    borderColor: "#FF768A", // Resalta en rosa si no está leída
+    elevation: 3,
   },
   iconContainer: {
-    width: 45,
-    height: 45,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 14,
   },
   notificationContent: {
     flex: 1,
+    justifyContent: "center",
   },
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
+    marginBottom: 2,
   },
   notificationTitle: {
     fontSize: 16,
@@ -278,23 +298,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unreadTitle: {
-    fontWeight: "bold",
+    fontWeight: "700", // Negrita para las no leídas
   },
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 10,
+    height: 10,
     backgroundColor: "#FF768A",
-    borderRadius: 4,
+    borderRadius: 5,
   },
   message: {
-    color: "#666",
-    marginTop: 4,
+    color: "#8D8D8D", // Gris secundario de la app
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2,
   },
   time: {
     fontSize: 12,
-    color: "#999",
+    color: "#9A9A9A",
     marginTop: 6,
+    fontWeight: "500",
   },
 });
-
-
