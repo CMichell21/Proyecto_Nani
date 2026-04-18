@@ -296,17 +296,17 @@ export default function BookingsListScreen() {
           />
         }
       >
-          <View style={styles.header}>
-            <View style={styles.headerTopRow}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.backButton}
-              >
-                <ArrowLeft size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Mis reservas</Text>
-            </View>
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <ArrowLeft size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Mis reservas</Text>
           </View>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Próximas</Text>
@@ -392,7 +392,7 @@ export default function BookingsListScreen() {
                       style={styles.qrExitButton}
                       onPress={() =>
                         router.push({
-                          pathname: "/register/client/ClientJobTracking",
+                          pathname: "/register/client/ClientActiveSession",
                           params: { bookingId: booking.id },
                         })
                       }
@@ -898,4 +898,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

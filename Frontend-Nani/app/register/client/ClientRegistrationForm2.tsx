@@ -4,6 +4,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
+import TermsModal from "../../../components/TermsModal";
 //import CustomMap from "../../../components/Maps/CustomMap";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -38,6 +39,10 @@ export default function ClientRegistrationForm2() {
   const [isAdult, setIsAdult] = useState(false);
   const [issubmitting, setIsSubmitting] = useState(false);
   const [reference, setReference] = useState("");
+
+  // --- TÉRMINOS Y CONDICIONES ---
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // --- ESTADOS DE DATOS ---
   const [errors, setErrors] = useState<any>({});
@@ -247,6 +252,13 @@ export default function ClientRegistrationForm2() {
       Alert.alert("Fotos", "Sube todos los documentos.");
       return;
     }
+    if (!termsAccepted) {
+      Alert.alert(
+        "Términos requeridos",
+        "Debes leer y aceptar los Términos y Condiciones para continuar.",
+      );
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -260,7 +272,6 @@ export default function ClientRegistrationForm2() {
 
       const uploadData = new FormData();
 
-      // --- 2. FUNCIÓN PARA PROCESAR IMÁGENES (WEB vs MÓVIL) ---
       const processAndAppendImage = async (
         key: string,
         asset: any,
@@ -269,12 +280,10 @@ export default function ClientRegistrationForm2() {
         if (!asset) return;
 
         if (Platform.OS === "web") {
-          // En Web, convertimos la URI del blob en un archivo real (File/Blob)
           const response = await fetch(asset.uri);
           const blob = await response.blob();
           uploadData.append(key, blob, fileName);
         } else {
-          // En móvil usamos el formato de objeto nativo
           uploadData.append(key, {
             uri: asset.uri,
             type: "image/jpeg",
@@ -283,7 +292,6 @@ export default function ClientRegistrationForm2() {
         }
       };
 
-      // --- 3. Ejecutar el procesamiento de las 3 imágenes ---
       await processAndAppendImage(
         "foto_url",
         formData.profilePhoto,
@@ -300,7 +308,6 @@ export default function ClientRegistrationForm2() {
         "dni_r.jpg",
       );
 
-      // --- 4. Agregar el resto de campos de Nani ---
       uploadData.append("telefono", formData.phone);
       uploadData.append("fecha_nacimiento", formData.birthDate);
       uploadData.append(
@@ -316,13 +323,11 @@ export default function ClientRegistrationForm2() {
         ENDPOINTS.complete_perfil_cliente,
       );
 
-      // --- 5. Petición al Servidor ---
       const response = await fetch(ENDPOINTS.complete_perfil_cliente, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
-          // RECUERDA: No pongas 'Content-Type' manualmente aquí
         },
         body: uploadData,
       });
@@ -344,7 +349,6 @@ export default function ClientRegistrationForm2() {
           },
         ]);
 
-        // Fix extra para navegación en Web
         if (Platform.OS === "web") {
           setTimeout(() => router.replace("/register/client/home"), 1000);
         }
@@ -634,6 +638,50 @@ export default function ClientRegistrationForm2() {
               </View>
             </View>
 
+            {/* ── Términos y Condiciones ───────────────────────────── */}
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setTermsAccepted(!termsAccepted)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    termsAccepted && styles.checkboxChecked,
+                  ]}
+                >
+                  {termsAccepted && (
+                    <Ionicons name="checkmark" size={14} color="white" />
+                  )}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  He leído y acepto los{" "}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => setShowTermsModal(true)}
+                  >
+                    Términos y Condiciones
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.downloadTermsBtn}
+                onPress={() => setShowTermsModal(true)}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color="#886BC1"
+                />
+                <Text style={styles.downloadTermsText}>
+                  Ver y Descargar PDF de Términos
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color="#886BC1" />
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.backBtn}
@@ -645,9 +693,11 @@ export default function ClientRegistrationForm2() {
                 style={[
                   styles.mainBtn,
                   { flex: 1 },
-                  (!isAdult || issubmitting) && { backgroundColor: "#D1D5DB" },
+                  (!isAdult || issubmitting || !termsAccepted) && {
+                    backgroundColor: "#D1D5DB",
+                  },
                 ]}
-                disabled={!isAdult || issubmitting}
+                disabled={!isAdult || issubmitting || !termsAccepted}
                 onPress={handleFinish}
               >
                 {issubmitting ? (
@@ -660,6 +710,16 @@ export default function ClientRegistrationForm2() {
           </>
         )}
       </ScrollView>
+
+      <TermsModal
+        visible={showTermsModal}
+        type="cliente"
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setTermsAccepted(true);
+          setShowTermsModal(false);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -816,6 +876,61 @@ const styles = StyleSheet.create({
   addNinoText: { color: "#886BC1", fontWeight: "bold" },
   errorText: { color: "#EF4444", fontSize: 11, marginBottom: 8, marginLeft: 4 },
   inputError: { borderColor: "#EF4444", borderWidth: 1 },
+
+  // Términos y condiciones
+  termsContainer: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#886BC1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: "#886BC1",
+    borderColor: "#886BC1",
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#374151",
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: "#886BC1",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  downloadTermsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F5F0FF",
+    borderRadius: 10,
+    padding: 12,
+  },
+  downloadTermsText: {
+    flex: 1,
+    color: "#886BC1",
+    fontWeight: "600",
+    fontSize: 13,
+  },
   webPickerContainer: {
     backgroundColor: "#F3F4F6",
     padding: 10,
@@ -843,4 +958,3 @@ const styles = StyleSheet.create({
     padding: 5,
   },
 });
-

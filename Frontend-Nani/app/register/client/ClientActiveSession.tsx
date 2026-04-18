@@ -39,7 +39,6 @@ import {
   Lock,
 } from "lucide-react-native";
 
-// ── Utilidades de formateo ──────────────────────────────────────────────────
 function formatCardNumber(value: string) {
   return value
     .replace(/\D/g, "")
@@ -54,7 +53,6 @@ function formatExpiry(value: string) {
   return digits;
 }
 
-// ── Pasarela de Pago con Tarjeta ────────────────────────────────────────────
 function CardPaymentGateway({
   visible,
   total,
@@ -109,7 +107,6 @@ function CardPaymentGateway({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.gatewayContainer}>
-          {/* Header */}
           <LinearGradient
             colors={["#886BC1", "#FF768A"]}
             style={styles.gatewayHeader}
@@ -136,7 +133,6 @@ function CardPaymentGateway({
             style={styles.gatewayForm}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Número de tarjeta */}
             <View style={styles.fieldContainer}>
               <Text style={styles.fieldLabel}>Número de tarjeta</Text>
               <View
@@ -165,7 +161,6 @@ function CardPaymentGateway({
               )}
             </View>
 
-            {/* Vencimiento y CVV en fila */}
             <View style={styles.fieldRow}>
               <View style={[styles.fieldContainer, { flex: 1 }]}>
                 <Text style={styles.fieldLabel}>Fecha de vencimiento</Text>
@@ -224,7 +219,6 @@ function CardPaymentGateway({
               </View>
             </View>
 
-            {/* Aviso de seguridad */}
             <View style={styles.securityNote}>
               <Lock size={13} color="#666" />
               <Text style={styles.securityNoteText}>
@@ -267,7 +261,6 @@ function CardPaymentGateway({
   );
 }
 
-// ── Pantalla principal ──────────────────────────────────────────────────────
 export default function ClientJobTracking() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -282,7 +275,6 @@ export default function ClientJobTracking() {
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
 
-  // ── Pasarela de pago ──
   const [showPaymentGateway, setShowPaymentGateway] = useState(false);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
@@ -356,7 +348,6 @@ export default function ClientJobTracking() {
     return () => clearInterval(timer);
   }, [booking?.status, booking?.hora_fin]);
 
-  // ── Detectar si el servicio acaba de finalizar para mostrar la pasarela ──
   useEffect(() => {
     const paymentStatus = String(booking?.paymentStatus ?? "").toLowerCase();
     if (paymentStatus === "completada" || paymentStatus === "completado") {
@@ -423,7 +414,6 @@ export default function ClientJobTracking() {
     if (!elegibleStatus.includes(booking.status)) return false;
     if (booking.cliente_confirmo_finalizacion) return false;
 
-    // Si es tarjeta, solo mostrar el banner de confirmación si ya pagó
     const esTarjeta = booking.paymentMethod?.toLowerCase().includes("tarjeta");
     if (esTarjeta && !paymentDone) return false;
 
@@ -500,7 +490,6 @@ export default function ClientJobTracking() {
           },
           body: JSON.stringify({
             reserva_id: booking.id,
-            // Pasamos los datos por si en el futuro los validas en el backend
             tarjeta: {
               numero: data.numero,
               vencimiento: data.vencimiento,
@@ -514,7 +503,6 @@ export default function ClientJobTracking() {
       const result = await response.json();
 
       if (response.ok) {
-        // Si el backend respondió success: true
         setShowPaymentGateway(false);
         setPaymentDone(true);
 
@@ -523,9 +511,8 @@ export default function ClientJobTracking() {
           `Pago procesado y reserva finalizada. Total: L. ${result.total_calculado}`,
         );
 
-        fetchBookingDetail(); // Refrescar pantalla para ver el estado "completada"
+        fetchBookingDetail();
       } else {
-        // Aquí caerán los errores de "Ya confirmada", "Expiró el tiempo", etc.
         Alert.alert(
           "Atención",
           result.message || "No se pudo procesar el pago.",
@@ -562,10 +549,7 @@ export default function ClientJobTracking() {
         {/* HEADER */}
         <LinearGradient colors={["#886BC1", "#FF768A"]} style={styles.header}>
           <View style={styles.headerTop}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleGoBack}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
               <ArrowLeft size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <View>
@@ -622,7 +606,6 @@ export default function ClientJobTracking() {
               </View>
             )}
 
-          {/* ── BADGE PAGO CON TARJETA REALIZADO ──────────────────────────── */}
           {paymentDone && (
             <View style={styles.paymentSuccessBadge}>
               <CheckCircle2 size={18} color="#16A34A" />
@@ -632,7 +615,6 @@ export default function ClientJobTracking() {
             </View>
           )}
 
-          {/* ── BANNER CONFIRMACIÓN FINALIZACIÓN ───────────────────────── */}
           {canConfirmFinish && (
             <View style={styles.confirmBanner}>
               <View style={styles.confirmBannerTop}>
@@ -1455,4 +1437,3 @@ const styles = StyleSheet.create({
   },
   payBtnText: { color: "#FFF", fontWeight: "800", fontSize: 15 },
 });
-

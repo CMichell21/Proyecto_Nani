@@ -151,6 +151,22 @@ export class ReservasController {
     } as any);
   }
   @UseGuards(SupabaseGuard)
+  @Post(':id/emergencia')
+  async reportarEmergencia(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { motivo: string },
+    @Req() req: any,
+  ) {
+    const authUserId = req.user?.id || req.user?.sub;
+    if (!authUserId) throw new BadRequestException('Usuario no identificado');
+    return this.reservasService.reportarEmergencia(
+      id,
+      body.motivo || '',
+      authUserId,
+    );
+  }
+
+  @UseGuards(SupabaseGuard)
   @Patch(':id/cancelar')
   async cancelar(
     @Param('id', ParseUUIDPipe) id: string,

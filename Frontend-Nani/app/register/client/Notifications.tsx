@@ -129,6 +129,9 @@ export default function Notifications() {
                   {notification.icon === "star" && (
                     <FontAwesome name="star" size={20} color="white" />
                   )}
+                  {notification.icon === "alert" && (
+                    <Ionicons name="warning" size={22} color="white" />
+                  )}
                 </View>
 
                 <View style={styles.notificationContent}>

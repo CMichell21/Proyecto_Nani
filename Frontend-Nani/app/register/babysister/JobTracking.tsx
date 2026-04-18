@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -25,6 +26,7 @@ import {
   Users,
   Banknote,
   CheckCircle2,
+  Siren,
 } from "lucide-react-native";
 
 export default function JobTracking() {
@@ -59,6 +61,12 @@ export default function JobTracking() {
   const [showCashConfirmModal, setShowCashConfirmModal] = useState(false);
   const [confirmingCash, setConfirmingCash] = useState(false);
   const [cashConfirmed, setCashConfirmed] = useState(false);
+
+  // ── Estado para emergencia ──
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [emergencyReason, setEmergencyReason] = useState("");
+  const [sendingEmergency, setSendingEmergency] = useState(false);
+  const [emergencySent, setEmergencySent] = useState(false);
 
   const bookingStatus =
     serverBooking?.status ?? String(initialBookingStatus || "");
@@ -171,8 +179,6 @@ export default function JobTracking() {
       setConfirmingCash(true);
       const token = await AsyncStorage.getItem("userToken");
 
-      // Usamos el helper de ENDPOINTS para evitar errores de construcción de URL
-      // bId debe ser el ID de la reserva (bookingId)
       const response = await fetch(
         ENDPOINTS.confirmar_cobro_efectivo(bookingId),
         {
@@ -181,7 +187,6 @@ export default function JobTracking() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          // Opcional: puedes enviar un campo 'metodo' para tu control interno
           body: JSON.stringify({ metodo: "efectivo" }),
         },
       );
@@ -196,7 +201,7 @@ export default function JobTracking() {
           `Se ha registrado el pago en efectivo. Total calculado: L. ${result.total_calculado}`,
           [{ text: "OK" }],
         );
-        fetchBookingFromServer(); // Refrescar pantalla
+        fetchBookingFromServer();
       } else {
         Alert.alert(
           "Error",
@@ -239,15 +244,52 @@ export default function JobTracking() {
     router.replace("/register/babysister/BabysitterDashboard");
   };
 
+  // ── Enviar emergencia ──
+  const handleSendEmergency = async () => {
+    if (emergencyReason.trim().length < 5) {
+      Alert.alert("Atención", "Por favor describe la emergencia (mínimo 5 caracteres).");
+      return;
+    }
+    try {
+      setSendingEmergency(true);
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await fetch(
+        ENDPOINTS.reportar_emergencia(String(bookingId || "")),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ motivo: emergencyReason.trim() }),
+        },
+      );
+      const result = await response.json();
+      if (response.ok) {
+        setShowEmergencyModal(false);
+        setEmergencySent(true);
+        setEmergencyReason("");
+        Alert.alert(
+          "Alerta enviada",
+          "El padre de familia fue notificado de la emergencia.",
+          [{ text: "OK" }],
+        );
+      } else {
+        Alert.alert("Error", result.message || "No se pudo enviar la alerta.");
+      }
+    } catch {
+      Alert.alert("Error", "No pudimos conectar con el servidor.");
+    } finally {
+      setSendingEmergency(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleGoBack}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
               <ArrowLeft color="white" size={22} />
             </TouchableOpacity>
 
@@ -415,6 +457,28 @@ export default function JobTracking() {
           </View>
         )}
 
+        {/* ── BOTÓN DE EMERGENCIA ──────────────────────────────────── */}
+        {normalizedStatus === "en_progreso" && (
+          <View style={styles.emergencySection}>
+            {emergencySent ? (
+              <View style={styles.emergencySentBadge}>
+                <Siren size={18} color="#991B1B" />
+                <Text style={styles.emergencySentText}>
+                  Alerta de emergencia enviada al padre ✓
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.emergencyButton}
+                onPress={() => setShowEmergencyModal(true)}
+              >
+                <Siren size={20} color="white" />
+                <Text style={styles.emergencyButtonText}>Emergencia</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {canScan && (
           <TouchableOpacity
             style={styles.confirmButton}
@@ -452,6 +516,68 @@ export default function JobTracking() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* ── MODAL EMERGENCIA ────────────────────────────────────────────── */}
+      <Modal
+        visible={showEmergencyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEmergencyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.emergencyModalIconContainer}>
+              <Siren size={44} color="#DC2626" />
+            </View>
+
+            <Text style={styles.emergencyModalTitle}>Reportar Emergencia</Text>
+            <Text style={styles.emergencyModalText}>
+              Esta alerta se enviará inmediatamente al padre de familia.
+              Describe brevemente qué está ocurriendo.
+            </Text>
+
+            <TextInput
+              style={styles.emergencyInput}
+              placeholder="Ej: El niño se cayó y necesita atención médica..."
+              placeholderTextColor="#BFBFBF"
+              multiline
+              value={emergencyReason}
+              onChangeText={setEmergencyReason}
+              maxLength={300}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setShowEmergencyModal(false);
+                  setEmergencyReason("");
+                }}
+                disabled={sendingEmergency}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.emergencyConfirmBtn,
+                  sendingEmergency && { opacity: 0.6 },
+                ]}
+                onPress={handleSendEmergency}
+                disabled={sendingEmergency}
+              >
+                {sendingEmergency ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.emergencyConfirmBtnText}>
+                    Enviar alerta
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── MODAL CONFIRMAR COBRO EFECTIVO ─────────────────────────────── */}
       <Modal
@@ -741,6 +867,91 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cashModalConfirmText: { color: "white", fontWeight: "700" },
+
+  // ── Emergencia ─────────────────────────────────────────────────────────
+  emergencySection: {
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  emergencyButton: {
+    backgroundColor: "#DC2626",
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#DC2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  emergencyButtonText: {
+    color: "white",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  emergencySentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+  },
+  emergencySentText: {
+    color: "#991B1B",
+    fontWeight: "600",
+    fontSize: 14,
+    flex: 1,
+  },
+
+  // Modal emergencia
+  emergencyModalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  emergencyModalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#DC2626",
+    marginBottom: 8,
+  },
+  emergencyModalText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  emergencyInput: {
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: "#333",
+    backgroundColor: "#FFF5F5",
+    minHeight: 90,
+    textAlignVertical: "top",
+    marginBottom: 20,
+  },
+  emergencyConfirmBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+  },
+  emergencyConfirmBtnText: { color: "white", fontWeight: "700" },
 });
-
-
