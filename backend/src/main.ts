@@ -7,7 +7,7 @@ async function bootstrap() {
  app.enableCors({
   origin: [
     'http://localhost:3000',
-    'http://localhost:8081', // Expo web local
+    'http://localhost:8081',
     process.env.FRONTEND_URL || 'https://proyectonani123.nancarrillo20032114.workers.dev',
   ],
   credentials: true,
