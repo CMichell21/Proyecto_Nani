@@ -8,6 +8,7 @@ async function bootstrap() {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const frontendUrl = process.env.FRONTEND_URL?.trim();
 
   const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
   const lanPattern =
@@ -19,6 +20,7 @@ async function bootstrap() {
         !origin ||
         localhostPattern.test(origin) ||
         lanPattern.test(origin) ||
+        (frontendUrl ? origin === frontendUrl : false) ||
         configuredOrigins.includes(origin)
       ) {
         return callback(null, true);
@@ -31,6 +33,8 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
-  await app.listen(process.env.PORT || 3000, '0.0.0.0');
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
+
 }
 bootstrap();
