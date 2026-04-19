@@ -77,8 +77,9 @@ export default function BabysitterChats() {
   }, [chats, searchText]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="light-content" />
+      <View style={{ height: insets.top, backgroundColor: "#886BC1" }} />
 
       <LinearGradient
         colors={["#886BC1", "#FF768A"]}
@@ -180,7 +181,7 @@ export default function BabysitterChats() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#886BC1" },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   header: {
     paddingHorizontal: 20,
     paddingBottom: 25,
