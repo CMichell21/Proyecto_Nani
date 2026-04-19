@@ -1,5 +1,5 @@
 
-export const API_URL = "https://proyectonani-production.up.railway.app/"
+export const API_URL = "https://proyectonani-production.up.railway.app"
 
 const buildUrl = (path: string) => `${API_URL}${path}`;
 
