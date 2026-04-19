@@ -84,86 +84,124 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
+      const normalizedEmail = email.trim().toLowerCase();
       const response = await fetch(ENDPOINTS.login, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          correo: email.trim().toLowerCase(),
+          correo: normalizedEmail,
           password: password,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-   if (!response.ok) {
-  setLoading(false);
-  const data = await response.json().catch(() => ({}));
-  let mensaje = "";
+      if (!response.ok) {
+        let mensaje = data.message || "Ocurrio un error inesperado";
 
-  // 1. Determinar el mensaje según el status
-  if (response.status === 404) {
-    mensaje = "Este correo no está registrado.";
-    setEmailError(mensaje);
-  } else if (response.status === 401) {
-    mensaje = "La contraseña o el correo es incorrecta.";
-    setPasswordError(mensaje);
-  } else {
-    mensaje = data.message || "Ocurrió un error inesperado";
-  }
+        if (response.status === 404) {
+          mensaje = "Este correo no esta registrado.";
+          setEmailError(mensaje);
+        } else if (response.status === 401) {
+          mensaje = "La contrasena o el correo son incorrectos.";
+          setPasswordError(mensaje);
+        }
 
-  // 2. DISPARAR LA ALERTA SEGÚN LA PLATAFORMA (Igual que en tu HomeScreen)
-  if (Platform.OS === 'web') {
-    // En web usamos el alert nativo del navegador
-    window.alert(mensaje); 
-  } else {
-    // En celular usamos el Alert de React Native
-    Alert.alert("Atención", mensaje);
-  }
+        if (response.status === 403 && data.requiresEmailVerification) {
+          mensaje =
+            data.message ||
+            "Debes verificar tu correo antes de iniciar sesion.";
+        }
 
-  return;
-}
+        if (Platform.OS === "web") {
+          if (response.status === 403 && data.requiresEmailVerification) {
+            const wantsResend = window.confirm(
+              `${mensaje}\n\nQuieres que te reenviemos el correo de verificacion?`
+            );
+
+            if (wantsResend) {
+              try {
+                const resendResponse = await fetch(ENDPOINTS.resend_verify_cliente, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ correo: normalizedEmail }),
+                });
+                const resendData = await resendResponse.json().catch(() => ({}));
+                window.alert(
+                  resendData.message || "Revisa tu bandeja de entrada."
+                );
+              } catch {
+                window.alert("No pudimos reenviar el correo en este momento.");
+              }
+            } else {
+              window.alert(mensaje);
+            }
+          } else {
+            window.alert(mensaje);
+          }
+        } else if (response.status === 403 && data.requiresEmailVerification) {
+          Alert.alert("Verifica tu correo", mensaje, [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Reenviar correo",
+              onPress: async () => {
+                try {
+                  const resendResponse = await fetch(ENDPOINTS.resend_verify_cliente, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ correo: normalizedEmail }),
+                  });
+                  const resendData = await resendResponse.json().catch(() => ({}));
+                  Alert.alert(
+                    "Correo enviado",
+                    resendData.message || "Revisa tu bandeja de entrada."
+                  );
+                } catch {
+                  Alert.alert("Error", "No pudimos reenviar el correo en este momento.");
+                }
+              },
+            },
+          ]);
+        } else {
+          Alert.alert("Atencion", mensaje);
+        }
+
+        return;
+      }
+
       try {
-        // Guardado de datos de sesión en almacenamiento local
         if (data.user && data.user.id) {
-          await AsyncStorage.setItem(
-            "userId",
-            data.user.id.toString()
-          );
+          await AsyncStorage.setItem("userId", data.user.id.toString());
           await AsyncStorage.setItem("userRole", data.user.rol);
 
           if (data.session?.access_token) {
-            await AsyncStorage.setItem(
-              "userToken",
-              data.session.access_token
-            );
+            await AsyncStorage.setItem("userToken", data.session.access_token);
           }
 
-          // Navegación según rol del usuario
           if (data.user.rol === "ninera") {
-            router.replace(
-              "/register/babysister/BabysitterDashboard"
-            );
+            router.replace("/register/babysister/BabysitterDashboard");
           } else if (data.user.rol === "cliente") {
             router.replace("/register/client/home");
           } else {
             router.replace("/");
           }
         } else {
-          throw new Error("El servidor no devolvió los datos del usuario");
+          throw new Error("El servidor no devolvio los datos del usuario");
         }
       } catch (storageError) {
-        console.error("Error al guardar sesión", storageError);
-        Alert.alert(
-          "Error",
-          "No se pudo guardar la sesión en el dispositivo"
-        );
+        console.error("Error al guardar sesion", storageError);
+        Alert.alert("Error", "No se pudo guardar la sesion en el dispositivo");
       }
     } catch (error) {
       Alert.alert(
         "Error de red",
-        "No se pudo conectar con el servidor. Verifica tu conexión."
+        "No se pudo conectar con el servidor. Verifica tu conexion."
       );
       console.log(error);
     } finally {
@@ -489,3 +527,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 });
+

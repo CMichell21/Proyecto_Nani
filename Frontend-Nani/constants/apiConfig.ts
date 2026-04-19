@@ -1,9 +1,5 @@
 
-const DEV_IP = "192.168.1.8";
-
-const PORT = "3000";
-
-export const API_URL = `http://${DEV_IP}:${PORT}`;
+export const API_URL = "https://proyectonani-production.up.railway.app"
 
 const buildUrl = (path: string) => `${API_URL}${path}`;
 
@@ -11,6 +7,7 @@ export const ENDPOINTS = {
   login: buildUrl("/auth/login"),
   register_ninera: buildUrl("/auth/register/ninera"),
   register_cliente: buildUrl("/auth/register/cliente"),
+  resend_verify_cliente: buildUrl("/auth/verify-email/resend"),
   me: buildUrl("/auth/me"),
   complete_perfil_cliente: buildUrl("/auth/complete-profile"),
 
