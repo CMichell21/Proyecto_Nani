@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 60 },
-  logo: { width: 100, height: 40, resizeMode: "contain", tintColor: "#FFFFFF" },
+  logo: { width: 200, height: 90, resizeMode: "contain" },
   navButtons: { flexDirection: "row", gap: 10 },
   outlineButton: { borderWidth: 1.5, borderColor: "rgba(255, 255, 255, 0.8)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   outlineButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
