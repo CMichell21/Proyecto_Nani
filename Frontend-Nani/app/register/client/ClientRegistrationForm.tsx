@@ -153,7 +153,9 @@ export default function ClientRegistrationForm() {
 
       if (response.ok) {
         const successTitle = "Cuenta creada";
-        const successMsg = "Te enviamos un correo de verificacion. Abre el enlace antes de iniciar sesion.";
+        const successMsg =
+          result.message ||
+          "Te enviamos un correo de verificacion. Abre el enlace antes de iniciar sesion.";
 
         if (Platform.OS === 'web') {
           window.alert(`${successTitle}\n${successMsg}`);

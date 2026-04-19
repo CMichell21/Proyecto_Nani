@@ -16,6 +16,12 @@ import { createHash, randomBytes } from 'crypto';
 export class AuthService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
+  private readonly resendTestEmail = 'keriverae@gmail.com';
+
+  private canSendVerificationEmail(correo: string) {
+    return correo.trim().toLowerCase() === this.resendTestEmail;
+  }
+
   private getVerificationBaseUrl() {
     const baseUrl = process.env.BACKEND_PUBLIC_URL?.trim();
 
@@ -224,11 +230,16 @@ export class AuthService {
           : usuario.cliente;
 
         if (!datosCliente?.email_verificado) {
+          const correoCliente = String(usuario.correo || '').trim().toLowerCase();
+          const pendingMessage = this.canSendVerificationEmail(correoCliente)
+            ? 'Debes verificar tu correo antes de iniciar sesion. Revisa tu bandeja de entrada.'
+            : 'Los correos ahorita no estan funcionando. Tu cuenta quedo pendiente de revision y se te dara acceso cuando sea aprobada.';
+
           throw new ForbiddenException({
-            message:
-              'Debes verificar tu correo antes de iniciar sesion. Revisa tu bandeja de entrada.',
+            message: pendingMessage,
             requiresEmailVerification: true,
             correo: usuario.correo,
+            manualReviewPending: !this.canSendVerificationEmail(correoCliente),
           });
         }
       }
@@ -744,17 +755,29 @@ export class AuthService {
         );
       }
 
-      await this.createAndSendVerificationEmail({
-        clienteId: clienteCreado.id,
-        correo: dto.correo,
-        nombre: dto.nombre,
-      });
+      const normalizedEmail = dto.correo.trim().toLowerCase();
+
+      if (this.canSendVerificationEmail(normalizedEmail)) {
+        await this.createAndSendVerificationEmail({
+          clienteId: clienteCreado.id,
+          correo: normalizedEmail,
+          nombre: dto.nombre,
+        });
+
+        return {
+          message:
+            'Cliente registrado con exito. Te enviamos un correo para verificar tu cuenta.',
+          userId: authCreated.user.id,
+          requiresEmailVerification: true,
+        };
+      }
 
       return {
         message:
-          'Cliente registrado con exito. Te enviamos un correo para verificar tu cuenta.',
+          'Los correos ahorita no estan funcionando. Tu registro quedo enviado para revision y se te dara acceso manualmente, igual que a las nineras.',
         userId: authCreated.user.id,
         requiresEmailVerification: true,
+        manualReviewPending: true,
       };
     } catch (err) {
       console.error('Error en registerCliente:', err);
@@ -822,6 +845,15 @@ export class AuthService {
       return {
         message: 'Este correo ya esta verificado. Ya puedes iniciar sesion.',
         alreadyVerified: true,
+      };
+    }
+
+    if (!this.canSendVerificationEmail(normalizedEmail)) {
+      return {
+        message:
+          'Los correos ahorita no estan funcionando para este correo. Tu cuenta quedo pendiente de revision manual.',
+        requiresEmailVerification: true,
+        manualReviewPending: true,
       };
     }
 
