@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from "react";
-
 import {
   Alert,
   Image,
   Modal,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -12,8 +13,9 @@ import {
   View,
 } from "react-native";
 
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ENDPOINTS } from "../../../constants/apiConfig";
@@ -30,7 +32,6 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
 
 export default function BabysitterDashboard() {
   const router = useRouter();
@@ -80,30 +81,9 @@ export default function BabysitterDashboard() {
   ];
 
   const HOURS = [
-    "00:00",
-    "01:00",
-    "02:00",
-    "03:00",
-    "04:00",
-    "05:00",
-    "06:00",
-    "07:00",
-    "08:00",
-    "09:00",
-    "10:00",
-    "11:00",
-    "12:00",
-    "13:00",
-    "14:00",
-    "15:00",
-    "16:00",
-    "17:00",
-    "18:00",
-    "19:00",
-    "20:00",
-    "21:00",
-    "22:00",
-    "23:00",
+    "00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00",
+    "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00",
+    "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00",
     "23:59",
   ];
 
@@ -634,876 +614,796 @@ export default function BabysitterDashboard() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={["#886BC1", "#FF768A"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.hello}>Hola, {userName} 👋</Text>
-            <Text style={styles.sub}>
-              Tienes {pendingBookings.length} reservas activas
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.notification}
-            onPress={() => router.push("./BabysitterNotifications")}
-          >
-            <Bell color="white" size={22} />
-            {unreadNotifications > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadNotifications}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <TrendingUp color="white" size={20} />
-            <Text style={styles.statValue}>L {stats.monthEarnings}</Text>
-            <Text style={styles.statLabel}>Este mes</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Star color="white" size={20} />
-            <Text style={styles.statValue}>{stats.rating}</Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <MessageCircle color="white" size={20} />
-            <Text style={styles.statValue}>{stats.newMessages}</Text>
-            <Text style={styles.statLabel}>Mensajes</Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>Reservas activas</Text>
-
-        {loadingBookings ? (
-          <Text style={{ color: "#666", marginBottom: 12 }}>
-            Cargando reservas...
-          </Text>
-        ) : pendingBookings.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              No tienes reservas activas por ahora.
-            </Text>
-          </View>
-        ) : (
-          pendingBookings.map((booking) => (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingRow}>
-                <Image
-                  source={{ uri: booking.clientPhoto }}
-                  style={styles.avatar}
-                />
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.clientName}>{booking.clientName}</Text>
-
-                  <View style={styles.row}>
-                    <Clock size={14} color="#666" />
-                    <Text style={styles.timeText}>
-                      {booking.date} | {booking.time}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.address}>{booking.address}</Text>
-
-                  <View style={styles.statusRow}>
-                    <Text style={styles.statusLabel}>Estado:</Text>
-                    <Text style={styles.statusValue}>{booking.status}</Text>
-                  </View>
-
-                  <View style={styles.buttonRow}>
-                    {normalizeBookingStatus(booking.status) === "pendiente" && (
-                      <TouchableOpacity
-                        style={styles.rejectBtn}
-                        onPress={() => {
-                          setBookingToReject(booking);
-                          setIsRejectModalOpen(true);
-                        }}
-                      >
-                        <Text style={styles.rejectText}>Rechazar</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                      style={styles.acceptBtn}
-                      onPress={() => {
-                        const normalizedStatus = normalizeBookingStatus(
-                          booking.status,
-                        );
-
-                        if (normalizedStatus === "pendiente") {
-                          handleOpenAcceptModal(booking);
-                          return;
-                        }
-
-                        if (
-                          normalizedStatus === "confirmada" ||
-                          normalizedStatus === "en_progreso"
-                        ) {
-                          openTrackingForBooking(booking);
-                        }
-                      }}
-                    >
-                      <QrCode size={14} color="white" />
-                      <Text style={styles.acceptText}>
-                        {getActionLabel(booking.status)}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.detailsBtn}
-                      onPress={() => handleShowDetails(booking)}
-                    >
-                      <Text>Detalles</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.paymentBox}>
-                  <Text style={styles.payment}>${booking.payment}</Text>
-                  <Text style={styles.children}>{booking.children} niños</Text>
-                </View>
-              </View>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.container}>
+        
+        {/* Header con Degradado Nani */}
+        <LinearGradient
+          colors={["#886BC1", "#FF768A"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.hello}>Hola, {userName} 👋</Text>
+              <Text style={styles.sub}>
+                Tienes {pendingBookings.length} reservas activas
+              </Text>
             </View>
-          ))
-        )}
 
-        <Text style={styles.sectionTitle}>Acciones rápidas</Text>
+            <TouchableOpacity
+              style={styles.notification}
+              onPress={() => router.push("./BabysitterNotifications")}
+            >
+              <Bell color="white" size={22} />
+              {unreadNotifications > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadNotifications}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.quickGrid}>
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <TrendingUp color="white" size={20} />
+              <Text style={styles.statValue}>L {stats.monthEarnings}</Text>
+              <Text style={styles.statLabel}>Este mes</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Star color="white" size={20} />
+              <Text style={styles.statValue}>{stats.rating}</Text>
+              <Text style={styles.statLabel}>Rating</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <MessageCircle color="white" size={20} />
+              <Text style={styles.statValue}>{stats.newMessages}</Text>
+              <Text style={styles.statLabel}>Mensajes</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>
+            <Text style={styles.sectionTitle}>Reservas activas</Text>
+
+            {loadingBookings ? (
+              <Text style={{ color: "#9A9A9A", marginBottom: 12 }}>
+                Cargando reservas...
+              </Text>
+            ) : pendingBookings.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>
+                  No tienes reservas activas por ahora.
+                </Text>
+              </View>
+            ) : (
+              pendingBookings.map((booking) => (
+                <View key={booking.id} style={styles.bookingCard}>
+                  <View style={styles.bookingRow}>
+                    <Image
+                      source={{ uri: booking.clientPhoto }}
+                      style={styles.avatar}
+                    />
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.clientName}>{booking.clientName}</Text>
+
+                      <View style={styles.row}>
+                        <Clock size={14} color="#8D8D8D" />
+                        <Text style={styles.timeText}>
+                          {booking.date} | {booking.time}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.address}>{booking.address}</Text>
+
+                      <View style={styles.statusRow}>
+                        <Text style={styles.statusLabel}>Estado:</Text>
+                        <Text style={styles.statusValue}>{booking.status}</Text>
+                      </View>
+
+                      <View style={styles.buttonRow}>
+                        {normalizeBookingStatus(booking.status) === "pendiente" && (
+                          <TouchableOpacity
+                            style={styles.rejectBtn}
+                            onPress={() => {
+                              setBookingToReject(booking);
+                              setIsRejectModalOpen(true);
+                            }}
+                          >
+                            <Text style={styles.rejectText}>Rechazar</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                          style={styles.acceptBtn}
+                          onPress={() => {
+                            const normalizedStatus = normalizeBookingStatus(
+                              booking.status,
+                            );
+
+                            if (normalizedStatus === "pendiente") {
+                              handleOpenAcceptModal(booking);
+                              return;
+                            }
+
+                            if (
+                              normalizedStatus === "confirmada" ||
+                              normalizedStatus === "en_progreso"
+                            ) {
+                              openTrackingForBooking(booking);
+                            }
+                          }}
+                        >
+                          <QrCode size={14} color="white" />
+                          <Text style={styles.acceptText}>
+                            {getActionLabel(booking.status)}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.detailsBtn}
+                          onPress={() => handleShowDetails(booking)}
+                        >
+                          <Text style={styles.detailsBtnText}>Detalles</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.paymentBox}>
+                      <Text style={styles.payment}>L {booking.payment}</Text>
+                      <Text style={styles.children}>{booking.children} niños</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+
+            <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Acciones rápidas</Text>
+
+            <View style={styles.quickGrid}>
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => setIsAvailabilityOpen(true)}
+              >
+                <Clock color="#886BC1" size={24} />
+                <Text style={styles.quickTitle}>Disponibilidad</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push("./BabysitterOwnProfile")}
+              >
+                <User color="#886BC1" size={24} />
+                <Text style={styles.quickTitle}>Mi perfil</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push("./Babysitterchats")}
+              >
+                <MessageCircle color="#886BC1" size={24} />
+                <Text style={styles.quickTitle}>Mensajes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push("./BabysitterBookingHistory")}
+              >
+                <Calendar color="#886BC1" size={24} />
+                <Text style={styles.quickTitle}>Reservas</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Navbar Flotante Nani Style */}
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <TouchableOpacity
-            style={styles.quickCard}
-            onPress={() => setIsAvailabilityOpen(true)}
+            style={styles.navItem}
+            onPress={() => setActiveTab("home")}
           >
-            <Clock color="#886BC1" />
-            <Text style={styles.quickTitle}>Disponibilidad</Text>
+            <Calendar size={22} color={activeTab === "home" ? "#886BC1" : "#B0B0B0"} />
+            <Text style={[styles.navText, activeTab === "home" && { color: "#886BC1" }]}>Inicio</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.quickCard}
-            onPress={() => router.push("./BabysitterOwnProfile")}
-          >
-            <User color="#886BC1" />
-            <Text style={styles.quickTitle}>Mi perfil</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickCard}
-            onPress={() => router.push("./Babysitterchats")}
-          >
-            <MessageCircle color="#886BC1" />
-            <Text style={styles.quickTitle}>Mensajes</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickCard}
+            style={styles.navItem}
             onPress={() => router.push("./BabysitterBookingHistory")}
           >
-            <Calendar color="#886BC1" />
-            <Text style={styles.quickTitle}>Reservas</Text>
+            <Clock size={22} color="#B0B0B0" />
+            <Text style={styles.navText}>Reservas</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.quickCard}
-            onPress={() => router.push("./BabysitterNotifications")}
+            style={styles.navItem}
+            onPress={() => router.push("./Babysitterchats")}
           >
-            <Bell color="#886BC1" />
-            <Text style={styles.quickTitle}>Notificaciones</Text>
+            <MessageCircle size={22} color="#B0B0B0" />
+            <Text style={styles.navText}>Chats</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => router.push("./BabysitterOwnProfile")}
+          >
+            <User size={22} color="#B0B0B0" />
+            <Text style={styles.navText}>Perfil</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
 
-      <View style={[styles.navbar, { paddingBottom: Math.max(insets.bottom, 15) }]}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav("home");
-            router.push("./BabysitterDashboard");
-          }}
-        >
-          <Home color={activeNav === "home" ? "#FF768A" : "#999"} />
-          <Text style={styles.navText}>Inicio</Text>
-        </TouchableOpacity>
-
-        {/* RESERVAS */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav("reservas");
-            router.push("./BabysitterBookingHistory");
-          }}
-        >
-          <Calendar color={activeNav === "reservas" ? "#FF768A" : "#999"} />
-          <Text style={styles.navText}>Reservas</Text>
-        </TouchableOpacity>
-
-        {/* CHATS */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("./Babysitterchats")}
-        >
-          <MessageCircle color="#999" />
-          <Text style={styles.navText}>Chats</Text>
-        </TouchableOpacity>
-
-        {/* PERFIL */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("./BabysitterOwnProfile")}
-        >
-          <User color="#999" />
-          <Text style={styles.navText}>Perfil</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Modal visible={isDetailsOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modal}>
-            <TouchableOpacity
-              style={styles.close}
-              onPress={() => setIsDetailsOpen(false)}
-            >
-              <X />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>Detalles de la reserva</Text>
-
-            {selectedBooking && (
-              <View>
-                <Text style={styles.modalText}>
-                  Cliente: {selectedBooking.clientName}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Fecha: {selectedBooking.date}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Hora: {selectedBooking.time}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Estado: {selectedBooking.status}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Dirección: {selectedBooking.address}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Pago: ${selectedBooking.payment}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Método de pago: {selectedBooking.paymentMethod}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Notas: {selectedBooking.notes}
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.okBtn}
-              onPress={() => setIsDetailsOpen(false)}
-            >
-              <Text style={{ color: "white" }}>Entendido</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={isAcceptModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modal}>
-            <TouchableOpacity
-              style={styles.close}
-              onPress={() => {
-                setIsAcceptModalOpen(false);
-                setBookingToAccept(null);
-              }}
-            >
-              <X />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>Aceptar reserva</Text>
-
-            {bookingToAccept && (
-              <View>
-                <Text style={styles.modalText}>
-                  ¿Deseas aceptar la reserva de {bookingToAccept.clientName}?
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Fecha: {bookingToAccept.date}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Hora: {bookingToAccept.time}
-                </Text>
-
-                <Text style={styles.modalText}>
-                  Dirección: {bookingToAccept.address}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.confirmButtonsRow}>
+        {/* Modales rediseñados con el estilo general */}
+        <Modal visible={isDetailsOpen} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modal}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={styles.close}
+                onPress={() => setIsDetailsOpen(false)}
+              >
+                <X color="#2E2E2E" size={20} />
+              </TouchableOpacity>
+
+              <Text style={styles.modalTitle}>Detalles de la reserva</Text>
+
+              {selectedBooking && (
+                <View>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Cliente: </Text>{selectedBooking.clientName}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Fecha: </Text>{selectedBooking.date}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Hora: </Text>{selectedBooking.time}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Estado: </Text>{selectedBooking.status}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Dirección: </Text>{selectedBooking.address}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Pago: </Text>L {selectedBooking.payment}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Método: </Text>{selectedBooking.paymentMethod}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Notas: </Text>{selectedBooking.notes}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.okBtn}
+                onPress={() => setIsDetailsOpen(false)}
+              >
+                <Text style={styles.okBtnText}>Entendido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={isAcceptModalOpen} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modal}>
+              <TouchableOpacity
+                style={styles.close}
                 onPress={() => {
                   setIsAcceptModalOpen(false);
                   setBookingToAccept(null);
                 }}
-                disabled={updatingBooking}
               >
-                <Text style={styles.cancelBtnText}>No</Text>
+                <X color="#2E2E2E" size={20} />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.okBtn,
-                  { flex: 1 },
-                  updatingBooking && { opacity: 0.7 },
-                ]}
-                onPress={handleAcceptBooking}
-                disabled={updatingBooking}
-              >
-                <Text style={{ color: "white" }}>
-                  {updatingBooking ? "Aceptando..." : "Sí, aceptar"}
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Aceptar reserva</Text>
+
+              {bookingToAccept && (
+                <View>
+                  <Text style={styles.modalText}>
+                    ¿Deseas aceptar la reserva de <Text style={{fontWeight: 'bold'}}>{bookingToAccept.clientName}</Text>?
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Fecha: </Text>{bookingToAccept.date}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Hora: </Text>{bookingToAccept.time}
+                  </Text>
+                  <Text style={styles.modalText}>
+                    <Text style={styles.modalLabel}>Dirección: </Text>{bookingToAccept.address}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.confirmButtonsRow}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => {
+                    setIsAcceptModalOpen(false);
+                    setBookingToAccept(null);
+                  }}
+                  disabled={updatingBooking}
+                >
+                  <Text style={styles.cancelBtnText}>No</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.okBtn,
+                    { flex: 1, marginTop: 0 },
+                    updatingBooking && { opacity: 0.7 },
+                  ]}
+                  onPress={handleAcceptBooking}
+                  disabled={updatingBooking}
+                >
+                  <Text style={styles.okBtnText}>
+                    {updatingBooking ? "Aceptando..." : "Sí, aceptar"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <Modal visible={isRejectModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Rechazar reserva</Text>
-            <Text style={styles.modalText}>
-              ¿Por qué rechazas la solicitud de {bookingToReject?.clientName}?
-            </Text>
-            <TextInput
-              style={styles.reasonInput}
-              placeholder="Escribe el motivo (opcional)"
-              multiline
-              value={rejectReason}
-              onChangeText={setRejectReason}
-            />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  setIsRejectModalOpen(false);
-                  setRejectReason("");
-                }}
-              >
-                <Text>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmRejectBtn}
-                onPress={handleRejectBooking}
-                disabled={rejectingBooking}
-              >
-                <Text style={{ color: "white", fontWeight: "700" }}>
-                  {rejectingBooking ? "Rechazando..." : "Confirmar rechazo"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={isAvailabilityOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modal}>
-            <TouchableOpacity
-              style={styles.close}
-              onPress={closeAvailabilityModal}
-            >
-              <X />
-            </TouchableOpacity>
-
-            <Text style={styles.modalTitle}>Gestionar disponibilidad</Text>
-
-            <ScrollView
-              style={styles.availabilityScrollArea}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.availabilityScrollContent}
-            >
-
-              <Text style={styles.inputLabel}>Día</Text>
-              <View style={styles.optionsWrap}>
-                {DAYS.map((day) => (
-                  <TouchableOpacity
-                    key={day}
-                    style={[
-                      styles.optionChip,
-                      availabilityForm.dia === day && styles.optionChipActive,
-                    ]}
-                    onPress={() => handleAvailabilityInputChange("dia", day)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionChipText,
-                        availabilityForm.dia === day &&
-                          styles.optionChipTextActive,
-                      ]}
-                    >
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Hora inicio</Text>
-              <View style={styles.optionsWrap}>
-                {HOURS.map((hour) => (
-                  <TouchableOpacity
-                    key={`start-${hour}`}
-                    style={[
-                      styles.optionChip,
-                      availabilityForm.hora_inicio === hour &&
-                        styles.optionChipActive,
-                    ]}
-                    onPress={() =>
-                      handleAvailabilityInputChange("hora_inicio", hour)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.optionChipText,
-                        availabilityForm.hora_inicio === hour &&
-                          styles.optionChipTextActive,
-                      ]}
-                    >
-                      {hour}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Hora fin</Text>
-              <View style={styles.optionsWrap}>
-                {HOURS.map((hour) => (
-                  <TouchableOpacity
-                    key={`end-${hour}`}
-                    style={[
-                      styles.optionChip,
-                      availabilityForm.hora_fin === hour &&
-                        styles.optionChipActive,
-                    ]}
-                    onPress={() =>
-                      handleAvailabilityInputChange("hora_fin", hour)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.optionChipText,
-                        availabilityForm.hora_fin === hour &&
-                          styles.optionChipTextActive,
-                      ]}
-                    >
-                      {hour}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={styles.addAvailabilityBtn}
-                onPress={addAvailabilityItem}
-              >
-                <Text style={styles.addAvailabilityBtnText}>
-                  Agregar horario
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.availabilityListWrap}>
-                {availabilityList.map((item) => (
-                  <View key={item.id} style={styles.availabilityItem}>
-                    <View>
-                      <Text style={styles.availabilityText}>
-                        {item.dia_semana}
-                      </Text>
-                      <Text style={styles.availabilitySubText}>
-                        {item.hora_inicio} - {item.hora_fin}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={() => removeAvailabilityItem(item.id)}
-                    >
-                      <Text style={styles.removeText}>Quitar</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.okBtn, savingAvailability && { opacity: 0.7 }]}
-              onPress={saveAvailability}
-              disabled={savingAvailability}
-            >
-              <Text style={{ color: "white" }}>
-                {savingAvailability ? "Guardando..." : "Guardar disponibilidad"}
+        <Modal visible={isRejectModalOpen} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>Rechazar reserva</Text>
+              <Text style={styles.modalText}>
+                ¿Por qué rechazas la solicitud de <Text style={{fontWeight: 'bold'}}>{bookingToReject?.clientName}</Text>?
               </Text>
-            </TouchableOpacity>
+              <TextInput
+                style={styles.reasonInput}
+                placeholder="Escribe el motivo (opcional)"
+                placeholderTextColor="#A0A0A0"
+                multiline
+                value={rejectReason}
+                onChangeText={setRejectReason}
+              />
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  style={styles.cancelModalBtn}
+                  onPress={() => {
+                    setIsRejectModalOpen(false);
+                    setRejectReason("");
+                  }}
+                >
+                  <Text style={styles.cancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmRejectBtn}
+                  onPress={handleRejectBooking}
+                  disabled={rejectingBooking}
+                >
+                  <Text style={{ color: "white", fontWeight: "700" }}>
+                    {rejectingBooking ? "Rechazando..." : "Confirmar rechazo"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
-      </Modal>
-    </View>
+        </Modal>
+
+        <Modal visible={isAvailabilityOpen} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modal}>
+              <TouchableOpacity
+                style={styles.close}
+                onPress={closeAvailabilityModal}
+              >
+                <X color="#2E2E2E" size={20} />
+              </TouchableOpacity>
+
+              <Text style={styles.modalTitle}>Gestionar disponibilidad</Text>
+
+              <ScrollView
+                style={styles.availabilityScrollArea}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.availabilityScrollContent}
+              >
+                <Text style={styles.inputLabel}>Día</Text>
+                <View style={styles.optionsWrap}>
+                  {DAYS.map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[
+                        styles.optionChip,
+                        availabilityForm.dia === day && styles.optionChipActive,
+                      ]}
+                      onPress={() => handleAvailabilityInputChange("dia", day)}
+                    >
+                      <Text
+                        style={[
+                          styles.optionChipText,
+                          availabilityForm.dia === day && styles.optionChipTextActive,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Hora inicio</Text>
+                <View style={styles.optionsWrap}>
+                  {HOURS.map((hour) => (
+                    <TouchableOpacity
+                      key={`start-${hour}`}
+                      style={[
+                        styles.optionChip,
+                        availabilityForm.hora_inicio === hour && styles.optionChipActive,
+                      ]}
+                      onPress={() => handleAvailabilityInputChange("hora_inicio", hour)}
+                    >
+                      <Text
+                        style={[
+                          styles.optionChipText,
+                          availabilityForm.hora_inicio === hour && styles.optionChipTextActive,
+                        ]}
+                      >
+                        {hour}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Hora fin</Text>
+                <View style={styles.optionsWrap}>
+                  {HOURS.map((hour) => (
+                    <TouchableOpacity
+                      key={`end-${hour}`}
+                      style={[
+                        styles.optionChip,
+                        availabilityForm.hora_fin === hour && styles.optionChipActive,
+                      ]}
+                      onPress={() => handleAvailabilityInputChange("hora_fin", hour)}
+                    >
+                      <Text
+                        style={[
+                          styles.optionChipText,
+                          availabilityForm.hora_fin === hour && styles.optionChipTextActive,
+                        ]}
+                      >
+                        {hour}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.addAvailabilityBtn}
+                  onPress={addAvailabilityItem}
+                >
+                  <Text style={styles.addAvailabilityBtnText}>Agregar horario</Text>
+                </TouchableOpacity>
+
+                <View style={styles.availabilityListWrap}>
+                  {availabilityList.map((item) => (
+                    <View key={item.id} style={styles.availabilityItem}>
+                      <View>
+                        <Text style={styles.availabilityText}>{item.dia_semana}</Text>
+                        <Text style={styles.availabilitySubText}>
+                          {item.hora_inicio} - {item.hora_fin}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => removeAvailabilityItem(item.id)}>
+                        <Text style={styles.removeText}>Quitar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.okBtn, savingAvailability && { opacity: 0.7 }]}
+                onPress={saveAvailability}
+                disabled={savingAvailability}
+              >
+                <Text style={styles.okBtnText}>
+                  {savingAvailability ? "Guardando..." : "Guardar disponibilidad"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  // Contenedores Base
+  safeArea: { flex: 1, backgroundColor: "#886BC1" },
   container: { flex: 1, backgroundColor: "#FAFAFA" },
+  scrollContent: { paddingBottom: 100 },
 
+  // Header Nani Style
   header: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 25,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
-
-  hello: { color: "white", fontSize: 20 },
-
-  sub: { color: "white", opacity: 0.8 },
-
+  hello: { color: "#FFFFFF", fontSize: 22, fontWeight: "700" },
+  sub: { color: "#FFFFFF", opacity: 0.9, fontSize: 14, marginTop: 4 },
+  
   notification: {
-    width: 45,
-    height: 45,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
-
   badge: {
     position: "absolute",
-    top: -5,
-    right: -5,
-    backgroundColor: "white",
+    top: -2,
+    right: -2,
+    backgroundColor: "#FF768A",
     borderRadius: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1.5,
+    borderColor: "#886BC1",
   },
-
-  badgeText: { color: "#FF768A", fontSize: 10 },
+  badgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "bold" },
 
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
-
   statCard: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 10,
-    borderRadius: 15,
-    width: "30%",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    padding: 12,
+    borderRadius: 16,
+    width: "31%",
+    alignItems: "flex-start",
   },
+  statValue: { color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginTop: 8 },
+  statLabel: { color: "#FFFFFF", fontSize: 12, opacity: 0.9, marginTop: 2 },
 
-  statValue: { color: "white", fontSize: 18 },
+  // Contenido Principal
+  content: { padding: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: "700", color: "#2E2E2E", marginBottom: 14 },
 
-  statLabel: { color: "white", fontSize: 11, opacity: 0.8 },
-
-  content: { padding: 20 },
-
-  sectionTitle: { fontSize: 18, marginBottom: 10 },
-
+  // Tarjetas de Reserva
   bookingCard: {
-    backgroundColor: "white",
-    padding: 15,
+    backgroundColor: "#FFFFFF",
+    padding: 14,
     borderRadius: 20,
-    marginBottom: 10,
+    marginBottom: 14,
+    elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    }),
   },
-
   emptyCard: {
-    backgroundColor: "white",
-    padding: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 24,
     borderRadius: 20,
     marginBottom: 16,
-  },
-
-  emptyText: {
-    color: "#666",
-    textAlign: "center",
-  },
-
-  bookingRow: { flexDirection: "row", gap: 10 },
-
-  avatar: { width: 55, height: 55, borderRadius: 30 },
-
-  clientName: { fontSize: 16, marginBottom: 4 },
-
-  row: { flexDirection: "row", alignItems: "center", gap: 5 },
-
-  timeText: { color: "#666", fontSize: 12 },
-
-  address: { color: "#999", fontSize: 12 },
-
-  statusRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 6,
+    justifyContent: "center",
   },
+  emptyText: { color: "#8D8D8D", textAlign: "center", fontSize: 15 },
+  
+  bookingRow: { flexDirection: "row", gap: 12 },
+  avatar: { width: 64, height: 64, borderRadius: 32 },
+  clientName: { fontSize: 17, fontWeight: "700", color: "#2E2E2E", marginBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 },
+  timeText: { color: "#8D8D8D", fontSize: 13 },
+  address: { color: "#9A9A9A", fontSize: 13, marginBottom: 6 },
+  
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusLabel: { color: "#8D8D8D", fontSize: 13 },
+  statusValue: { color: "#886BC1", fontSize: 13, fontWeight: "700" },
 
-  statusLabel: {
-    color: "#666",
-    fontSize: 12,
-  },
-
-  statusValue: {
-    color: "#886BC1",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  buttonRow: { flexDirection: "row", marginTop: 8, gap: 8 },
-
+  buttonRow: { flexDirection: "row", marginTop: 12, gap: 8, flexWrap: "wrap" },
+  
   acceptBtn: {
     flexDirection: "row",
     backgroundColor: "#FF768A",
-    padding: 6,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     alignItems: "center",
-    gap: 4,
+    gap: 6,
   },
-
-  acceptText: { color: "white" },
-
-  detailsBtn: { backgroundColor: "#eee", padding: 6, borderRadius: 10 },
+  acceptText: { color: "#FFFFFF", fontWeight: "600", fontSize: 13 },
+  
+  rejectBtn: {
+    backgroundColor: "#FFF0F2",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rejectText: { color: "#FF768A", fontWeight: "700", fontSize: 13 },
+  
+  detailsBtn: { 
+    backgroundColor: "#F3F4F6", 
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    borderRadius: 12,
+    justifyContent: "center"
+  },
+  detailsBtnText: { color: "#555", fontSize: 13, fontWeight: "600" },
 
   paymentBox: { alignItems: "flex-end" },
+  payment: { color: "#886BC1", fontSize: 18, fontWeight: "700" },
+  children: { fontSize: 12, color: "#9A9A9A", marginTop: 4 },
 
-  payment: { color: "#886BC1", fontSize: 18 },
-
-  children: { fontSize: 12, color: "#777" },
-
+  // Grid de Acciones Rápidas
   quickGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
-
   quickCard: {
-    backgroundColor: "white",
+    backgroundColor: "#FFFFFF",
     width: "48%",
-    padding: 20,
+    padding: 16,
     borderRadius: 20,
-    marginBottom: 10,
+    marginBottom: 14,
+    elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    }),
   },
+  quickTitle: { marginTop: 10, fontSize: 14, fontWeight: "600", color: "#2E2E2E" },
 
-  quickTitle: { marginTop: 5 },
-
-  navbar: {
+  // Navbar Inferior Flotante
+  bottomNav: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
     flexDirection: "row",
     justifyContent: "space-around",
-    padding: 15,
-    backgroundColor: "white",
-    borderTopWidth: 1,
-    borderColor: "#eee",
+    alignItems: "center",
+    elevation: 10,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    }),
   },
+  navItem: { alignItems: "center", justifyContent: "center" },
+  navText: { marginTop: 4, fontSize: 12, color: "#B0B0B0", fontWeight: "500" },
 
-  navItem: { alignItems: "center" },
-
-  navText: { fontSize: 11 },
-
+  // Estilos de Modales
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
   },
-
   modal: {
-    backgroundColor: "white",
-    width: "85%",
-    maxHeight: "80%",
-    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    width: "88%",
+    maxHeight: "85%",
+    borderRadius: 24,
     padding: 20,
+    elevation: 5,
   },
-  availabilityScrollArea: {
-    flexGrow: 0,
+  close: {
+    position: "absolute",
+    right: 16,
+    top: 16,
+    zIndex: 10,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 20,
+    padding: 6,
   },
-  availabilityScrollContent: {
-    paddingTop: 10,
-    paddingBottom: 16,
-  },
-
-  modalTitle: { fontSize: 18, marginBottom: 10 },
-
-  modalText: { marginBottom: 5 },
-
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#2E2E2E", marginBottom: 16, paddingRight: 30 },
+  modalText: { fontSize: 15, color: "#555", marginBottom: 8, lineHeight: 22 },
+  modalLabel: { fontWeight: "600", color: "#2E2E2E" },
+  
   okBtn: {
     backgroundColor: "#FF768A",
-    padding: 10,
-    borderRadius: 10,
-    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 16,
     alignItems: "center",
   },
+  okBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 
-  inputLabel: {
-    marginTop: 10,
-    marginBottom: 6,
-    color: "#555",
-    fontSize: 13,
+  // Modal Disponibilidad
+  availabilityScrollArea: { flexGrow: 0 },
+  availabilityScrollContent: { paddingTop: 4, paddingBottom: 16 },
+  inputLabel: { marginTop: 10, marginBottom: 8, color: "#2E2E2E", fontSize: 15, fontWeight: "600" },
+  optionsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  
+  optionChip: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
   },
+  optionChipActive: { backgroundColor: "#886BC1" },
+  optionChipText: { color: "#555", fontSize: 14, fontWeight: "500" },
+  optionChipTextActive: { color: "#FFFFFF", fontWeight: "700" },
 
   addAvailabilityBtn: {
-    backgroundColor: "#886BC1",
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    paddingVertical: 12,
+    borderRadius: 16,
     alignItems: "center",
     marginTop: 8,
   },
+  addAvailabilityBtnText: { color: "#886BC1", fontWeight: "700", fontSize: 15 },
 
-  addAvailabilityBtnText: {
-    color: "white",
-    fontWeight: "bold",
-  },
-
+  availabilityListWrap: { marginTop: 16, gap: 10 },
   availabilityItem: {
-    backgroundColor: "#F7F7F7",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: "#FAFAFA",
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+    borderRadius: 16,
+    padding: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  availabilityText: { fontSize: 16, fontWeight: "700", color: "#2E2E2E" },
+  availabilitySubText: { fontSize: 14, color: "#8D8D8D", marginTop: 2 },
+  removeText: { color: "#FF768A", fontWeight: "700", fontSize: 14 },
 
-  availabilityText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-
-  availabilitySubText: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 2,
-  },
-  availabilityListWrap: {
-    marginTop: 12,
-    paddingBottom: 4,
-    gap: 8,
-  },
-
-  removeText: {
-    color: "#FF768A",
-    fontWeight: "bold",
-  },
-
-  optionsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 10,
-  },
-
-  optionChip: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-
-  optionChipActive: {
-    backgroundColor: "#886BC1",
-  },
-
-  optionChipText: {
-    color: "#555",
-    fontSize: 13,
-  },
-
-  optionChipTextActive: {
-    color: "white",
-    fontWeight: "bold",
-  },
-
-  close: {
-    position: "absolute",
-    right: 10,
-    top: 10,
-    zIndex: 10,
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 4,
-  },
-
-  confirmButtonsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 15,
-  },
-
+  // Botones Confirmación Modal
+  confirmButtonsRow: { flexDirection: "row", gap: 12, marginTop: 20 },
   cancelBtn: {
     flex: 1,
-    backgroundColor: "#EDEDED",
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    paddingVertical: 14,
+    borderRadius: 16,
     alignItems: "center",
   },
-
-  cancelBtnText: {
-    color: "#444",
-    fontWeight: "600",
-  },
-  rejectBtn: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  rejectText: { color: "#DC2626", fontWeight: "700", fontSize: 13 },
+  cancelBtnText: { color: "#555", fontWeight: "700", fontSize: 16 },
+  
   reasonInput: {
     width: "100%",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
-    height: 90,
+    backgroundColor: "#FAFAFA",
+    borderRadius: 16,
+    padding: 16,
+    height: 100,
     textAlignVertical: "top",
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    marginVertical: 12,
+    marginVertical: 16,
+    fontSize: 15,
   },
+  
   confirmRejectBtn: {
     flex: 2,
-    backgroundColor: "#DC2626",
-    borderRadius: 10,
-    paddingVertical: 12,
+    backgroundColor: "#FF768A",
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: "center",
   },
   cancelModalBtn: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: "center",
   },
 });
-
-

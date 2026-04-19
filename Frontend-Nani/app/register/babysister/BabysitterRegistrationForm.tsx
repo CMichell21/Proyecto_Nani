@@ -4,9 +4,6 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import MapView, { Marker } from "react-native-maps";
-import * as Location from "expo-location";
-import { useEffect } from "react";
 import TermsModal from "../../../components/TermsModal";
 import {
   ActivityIndicator,
@@ -75,38 +72,6 @@ export default function BabysitterRegistrationForm() {
     idPhotoBack: null as any,
     facePhoto: null as any,
   });
-
-  const [region, setRegion] = useState({
-    latitude: 14.0723,
-    longitude: -87.1921,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  });
-
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        Alert.alert("Permiso requerido", "Se necesita acceso a la ubicación");
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-
-      setRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
-
-      setFormData({
-        ...formData,
-        location: `${location.coords.latitude}, ${location.coords.longitude}`,
-      });
-    })();
-  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
@@ -703,29 +668,28 @@ export default function BabysitterRegistrationForm() {
                 <Text style={styles.errorText}>{errors.phone}</Text>
               )}
 
-              <Text style={styles.label}>Selecciona tu ubicación</Text>
-
-              <MapView
-                style={{ width: "100%", height: 200, borderRadius: 15, marginTop: 10 }}
-                region={region}
-                onPress={(e) => {
-                  const { latitude, longitude } = e.nativeEvent.coordinate;
-
-                  setRegion({
-                    ...region,
-                    latitude,
-                    longitude,
-                  });
-
-                  handleInputChange("location", `${latitude}, ${longitude}`);
-                }}
+              <Text style={styles.label}>Ubicación</Text>
+              <View
+                style={[
+                  styles.inputContainer,
+                  errors.location && styles.inputError,
+                ]}
               >
-                <Marker coordinate={region} />
-              </MapView>
-
-              <Text style={{ fontSize: 12, marginTop: 5, color: "#6B7280" }}>
-                Toca el mapa para seleccionar tu ubicación
-              </Text>
+                <Ionicons
+                  name="location-outline"
+                  size={18}
+                  color={errors.location ? "#EF4444" : "#9CA3AF"}
+                />
+                <TextInput
+                  placeholder="Ciudad, País"
+                  style={styles.input}
+                  onChangeText={(v) => handleInputChange("location", v)}
+                  onBlur={() => validateField("location", formData.location)}
+                />
+              </View>
+              {errors.location && (
+                <Text style={styles.errorText}>{errors.location}</Text>
+              )}
 
               <Text style={styles.label}>Contraseña</Text>
               <View
@@ -1297,5 +1261,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
-
 

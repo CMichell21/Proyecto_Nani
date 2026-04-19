@@ -6,11 +6,12 @@ import { useRouter } from "expo-router";
 import { ENDPOINTS } from "../../../constants/apiConfig";
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -184,10 +185,11 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <StatusBar barStyle="light-content" />
         <View style={[styles.container, styles.centerContent]}>
           <ActivityIndicator size="large" color="#886BC1" />
-          <Text style={{ textAlign: "center", marginTop: 12 }}>
-            Cargando reservas...
+          <Text style={{ textAlign: "center", marginTop: 12, color: "#8D8D8D", fontWeight: "600" }}>
+            Cargando historial...
           </Text>
         </View>
       </SafeAreaView>
@@ -195,460 +197,257 @@ export default function BabysitterBookingHistory({ onBack }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        <LinearGradient
-          colors={["#886BC1", "#FF768A"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() =>
-                onBack
-                  ? onBack()
-                  : router.replace("/register/babysister/BabysitterDashboard")
-              }
-            >
-              <Ionicons name="arrow-back" size={20} color="white" />
-            </TouchableOpacity>
-
-            <Text style={styles.headerTitle}>Historial de Reservas</Text>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Completadas</Text>
-              <Text style={styles.statValue}>{completedCount}</Text>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.container}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          
+          {/* Header Degradado Nani Style */}
+          <LinearGradient
+            colors={["#886BC1", "#FF768A"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.header}
+          >
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() =>
+                  onBack
+                    ? onBack()
+                    : router.replace("/register/babysister/BabysitterDashboard")
+                }
+              >
+                <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Historial de Reservas</Text>
+              <View style={{ width: 44 }} /> {/* Espaciador invisible para centrar el título */}
             </View>
 
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Ganado total</Text>
-              <Text style={styles.statValue}>L {totalEarnings}</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Completadas</Text>
+                <Text style={styles.statValue}>{completedCount}</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Ganado total</Text>
+                <Text style={styles.statValue}>L {totalEarnings}</Text>
+              </View>
+            </View>
+          </LinearGradient>
+
+          {/* Buscador y Filtros */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={20} color="#A0A0A0" />
+              <TextInput
+                placeholder="Buscar por cliente..."
+                placeholderTextColor="#A0A0A0"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={styles.searchInput}
+              />
+            </View>
+
+            <View style={styles.filterRow}>
+              {[
+                { key: "all", label: "Todas" },
+                { key: "pending", label: "Pendientes" },
+                { key: "confirmed", label: "Confirmadas" },
+                { key: "in_progress", label: "En progreso" },
+                { key: "completed", label: "Finalizadas" },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[
+                    styles.filterButton,
+                    filter === item.key && styles.activeFilter,
+                  ]}
+                  onPress={() => setFilter(item.key as BookingStatus)}
+                >
+                  <Text
+                    style={
+                      filter === item.key
+                        ? styles.activeFilterText
+                        : styles.filterText
+                    }
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
-        </LinearGradient>
 
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={18} color="gray" />
-            <TextInput
-              placeholder="Buscar por cliente..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              style={styles.searchInput}
-            />
-          </View>
+          {/* Lista de Reservas */}
+          <View style={{ paddingHorizontal: 16 }}>
+            {filteredBookings.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No hay reservas</Text>
+                <Text style={styles.emptyText}>
+                  No encontramos reservas con ese filtro o búsqueda.
+                </Text>
+              </View>
+            ) : (
+              filteredBookings.map((booking) => (
+                <View key={booking.id} style={styles.bookingCard}>
+                  <Image
+                    source={{ uri: booking.clientPhoto }}
+                    style={styles.clientPhoto}
+                  />
 
-          <View style={styles.filterRow}>
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === "all" && styles.activeFilter,
-              ]}
-              onPress={() => setFilter("all")}
-            >
-              <Text
-                style={
-                  filter === "all" ? styles.activeFilterText : styles.filterText
-                }
-              >
-                Todas
-              </Text>
-            </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientName}>{booking.clientName}</Text>
 
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === "pending" && styles.activeFilter,
-              ]}
-              onPress={() => setFilter("pending")}
-            >
-              <Text
-                style={
-                  filter === "pending"
-                    ? styles.activeFilterText
-                    : styles.filterText
-                }
-              >
-                Pendientes
-              </Text>
-            </TouchableOpacity>
+                    <View style={styles.row}>
+                      <MaterialIcons
+                        name="calendar-today"
+                        size={14}
+                        color="#8D8D8D"
+                      />
+                      <Text style={styles.infoText}>{booking.date}</Text>
+                    </View>
 
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === "confirmed" && styles.activeFilter,
-              ]}
-              onPress={() => setFilter("confirmed")}
-            >
-              <Text
-                style={
-                  filter === "confirmed"
-                    ? styles.activeFilterText
-                    : styles.filterText
-                }
-              >
-                Confirmadas
-              </Text>
-            </TouchableOpacity>
+                    <View style={styles.row}>
+                      <Ionicons name="time-outline" size={15} color="#8D8D8D" />
+                      <Text style={styles.infoText}>{booking.time}</Text>
+                    </View>
 
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === "in_progress" && styles.activeFilter,
-              ]}
-              onPress={() => setFilter("in_progress")}
-            >
-              <Text
-                style={
-                  filter === "in_progress"
-                    ? styles.activeFilterText
-                    : styles.filterText
-                }
-              >
-                En progreso
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === "completed" && styles.activeFilter,
-              ]}
-              onPress={() => setFilter("completed")}
-            >
-              <Text
-                style={
-                  filter === "completed"
-                    ? styles.activeFilterText
-                    : styles.filterText
-                }
-              >
-                Finalizadas
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={{ padding: 20 }}>
-          {filteredBookings.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No hay reservas</Text>
-              <Text style={styles.emptyText}>
-                No encontramos reservas con ese filtro o búsqueda.
-              </Text>
-            </View>
-          ) : (
-            filteredBookings.map((booking) => (
-              <View key={booking.id} style={styles.bookingCard}>
-                <Image
-                  source={{ uri: booking.clientPhoto }}
-                  style={styles.clientPhoto}
-                />
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.clientName}>{booking.clientName}</Text>
-
-                  <View style={styles.row}>
-                    <MaterialIcons
-                      name="calendar-month"
-                      size={16}
-                      color="gray"
-                    />
-                    <Text style={styles.infoText}>{booking.date}</Text>
-                  </View>
-
-                  <View style={styles.row}>
-                    <Ionicons name="time-outline" size={16} color="gray" />
-                    <Text style={styles.infoText}>{booking.time}</Text>
-                  </View>
-
-                  <View style={styles.footerRow}>
-                    <Text style={styles.childrenText}>
-                      {booking.children} niños
-                    </Text>
-
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={styles.payment}>L {booking.payment}</Text>
-                      <Text style={getStatusStyle(booking.status)}>
-                        {getStatusText(booking.status)}
+                    <View style={styles.footerRow}>
+                      <Text style={styles.childrenText}>
+                        {booking.children} {booking.children === 1 ? 'niño' : 'niños'}
                       </Text>
+
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={styles.payment}>L {booking.payment}</Text>
+                        <Text style={getStatusStyle(booking.status)}>
+                          {getStatusText(booking.status)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 </View>
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
-      <View style={styles.navbar}>
-        {/* INICIO */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav("home");
-            router.push("./BabysitterDashboard");
-          }}
-        >
-          <Home color={activeNav === "home" ? "#FF768A" : "#999"} />
-          <Text style={styles.navText}>Inicio</Text>
-        </TouchableOpacity>
-
-        {/* RESERVAS */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav("reservas");
-            router.push("./BabysitterBookingHistory");
-          }}
-        >
-          <Calendar color={activeNav === "reservas" ? "#FF768A" : "#999"} />
-          <Text style={styles.navText}>Reservas</Text>
-        </TouchableOpacity>
-
-        {/* CHATS */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("./Babysitterchats")}
-        >
-          <MessageCircle color="#999" />
-          <Text style={styles.navText}>Chats</Text>
-        </TouchableOpacity>
-
-        {/* PERFIL */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("./BabysitterOwnProfile")}
-        >
-          <User color="#999" />
-          <Text style={styles.navText}>Perfil</Text>
-        </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#886BC1",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#FAFAFA",
-  },
+  // Contenedores
+  safeArea: { flex: 1, backgroundColor: "#886BC1" },
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
+  centerContent: { justifyContent: "center", alignItems: "center" },
 
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
+  // Header Nani Style
   header: {
     paddingTop: 14,
-    paddingHorizontal: 20,
-    paddingBottom: 25,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
-
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 20,
   },
-
-  headerTitle: {
-    color: "white",
-    fontSize: 20,
-    marginLeft: 10,
-  },
-
   backButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 10,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  headerTitle: { color: "#FFFFFF", fontSize: 20, fontWeight: "700" },
 
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
+  // Stats Row
+  statsRow: { flexDirection: "row", justifyContent: "space-between" },
   statCard: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    padding: 15,
-    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    padding: 16,
+    borderRadius: 16,
     width: "48%",
   },
+  statLabel: { color: "#FFFFFF", opacity: 0.9, fontSize: 13, marginBottom: 4 },
+  statValue: { color: "#FFFFFF", fontSize: 22, fontWeight: "700" },
 
-  statLabel: {
-    color: "white",
-    opacity: 0.8,
-  },
-
-  statValue: {
-    color: "white",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-
-  searchContainer: {
-    padding: 20,
-  },
-
+  // Buscador y Filtros
+  searchContainer: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 10 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    padding: 12,
-    borderRadius: 15,
-    marginBottom: 10,
+    backgroundColor: "#FFFFFF",
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+    }),
   },
-
-  searchInput: {
-    marginLeft: 10,
-    flex: 1,
-  },
-
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-
+  searchInput: { marginLeft: 10, flex: 1, fontSize: 15, color: "#2E2E2E" },
+  
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 6,
+    backgroundColor: "#F3F4F6",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    marginBottom: 8,
   },
+  activeFilter: { backgroundColor: "#886BC1" },
+  filterText: { color: "#555", fontSize: 13, fontWeight: "500" },
+  activeFilterText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
 
-  activeFilter: {
-    backgroundColor: "#FF768A",
-    borderColor: "#FF768A",
-  },
-
-  filterText: {
-    color: "#666",
-  },
-
-  activeFilterText: {
-    color: "white",
-  },
-
+  // Tarjetas de Reservas
   bookingCard: {
-    backgroundColor: "white",
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
     flexDirection: "row",
-    marginBottom: 15,
+    marginBottom: 14,
+    elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+    }),
   },
+  clientPhoto: { width: 64, height: 64, borderRadius: 32, marginRight: 14 },
+  clientName: { fontSize: 17, marginBottom: 6, fontWeight: "700", color: "#2E2E2E" },
+  
+  row: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  infoText: { color: "#8D8D8D", fontSize: 13 },
+  
+  footerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 10 },
+  childrenText: { color: "#9A9A9A", fontSize: 13, marginBottom: 2 },
+  payment: { fontSize: 18, color: "#886BC1", fontWeight: "700", marginBottom: 2 },
 
-  clientPhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
-  },
+  // Estados
+  completed: { color: "#22C55E", fontSize: 13, fontWeight: "700" }, // Verde moderno
+  pending: { color: "#F59E0B", fontSize: 13, fontWeight: "700" },   // Naranja vibrante
+  confirmed: { color: "#3B82F6", fontSize: 13, fontWeight: "700" }, // Azul claro
+  inProgress: { color: "#886BC1", fontSize: 13, fontWeight: "700" },// Morado de la app
+  rejected: { color: "#EF4444", fontSize: 13, fontWeight: "700" },  // Rojo moderno
 
-  clientName: {
-    fontSize: 16,
-    marginBottom: 4,
-    fontWeight: "600",
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-
-  infoText: {
-    color: "gray",
-    marginLeft: 6,
-  },
-
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-
-  childrenText: {
-    color: "gray",
-  },
-
-  payment: {
-    fontSize: 16,
-    color: "#886BC1",
-    fontWeight: "bold",
-  },
-
-  completed: {
-    color: "green",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  pending: {
-    color: "#E69B00",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  confirmed: {
-    color: "#2D9CDB",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  inProgress: {
-    color: "#9B51E0",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
+  // Tarjeta vacía
   emptyCard: {
-    backgroundColor: "white",
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
+    marginTop: 10,
+    elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+    }),
   },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 6,
-    color: "#2E2E2E",
-  },
-
-  emptyText: {
-    color: "#666",
-    textAlign: "center",
-  },
-  rejected: { color: "#DC2626", fontSize: 12, fontWeight: "600" },
-
-  navbar: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    padding: 15,
-    backgroundColor: "white",
-    borderTopWidth: 1,
-    borderColor: "#eee",
-  },
-
-  navItem: {
-    alignItems: "center",
-  },
-
-  navText: {
-    fontSize: 11,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "700", marginBottom: 8, color: "#2E2E2E" },
+  emptyText: { color: "#8D8D8D", textAlign: "center", fontSize: 14, lineHeight: 20 },
 });
-
-
